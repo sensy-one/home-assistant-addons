@@ -1,6 +1,6 @@
-name: "Sensy-One Zone Editor"
-description: "Add-on for configuring polygon detection zones on Sensy-One devices."
-version: "1.0.1"
+name: "Sensy‑One Device Finder"
+description: "Finds devices with manufacturer 'Sensy-One' using HA Template API"
+version: "0.0.1"
 slug: "sensy_one_device_finder"
 init: false
 arch:
@@ -10,6 +10,6 @@ startup: services
 boot: auto
 ingress: true
 ingress_port: 8099
-panel_title: "Zone Editor"
-panel_icon: "mdi:vector-polygon"
+panel_title: "Sensy‑One Finder"
+panel_icon: "mdi:magnify"
 homeassistant_api: true

@@ -408,7 +408,7 @@
     return isExcl?{fill:cssVar('--z-excl-dim-fill'),stroke:cssVar('--z-excl-dim'),width:1.2,fillAlpha:1}:{fill:cssVar('--z-norm-dim-fill'),stroke:cssVar('--z-norm-dim'),width:1.2,fillAlpha:1};
   }
 
-  function targetRadius(){ return matchMedia('(max-width: 768px)').matches ? 5 : 5; }
+  function targetRadius(){ return matchMedia('(max-width: 768px)').matches ? 5 : 6; }
 
   function drawHandles(pts){
     const color=currentZone==='excl'?cssVar('--z-excl'):cssVar('--z-norm');
