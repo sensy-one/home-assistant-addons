@@ -1,5 +1,5 @@
 name: "Sensy-One Zone Editor"
-version: "1.0.0"
+version: "1.0.1"
 slug: "sensy_one_zone_editor"
 description: "Add-on for configuring polygon detection zones on Sensy-One devices."
 arch:

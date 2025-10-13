@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>Sensy-One Zone Editor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sensy-One Zone Editor (HA)</title>
 <style>
   :root{
     --bg:#06070a; --panel:#0a0c11; --panel-2:#0b0d12; --ctrl:#10131a; --bd:#171b22;
@@ -11,15 +11,9 @@
     --canvas:#0a0d12; --fov:#5f7cff;
     --z-norm:#69b1ff; --z-norm-fill:rgba(105,177,255,.16); --z-norm-dim:#3c6fa9; --z-norm-dim-fill:rgba(105,177,255,.08);
     --z-excl:#ff6b6b; --z-excl-fill:rgba(255,107,107,.16); --z-excl-dim:#a84848; --z-excl-dim-fill:rgba(255,107,107,.08);
-    --pulse:#22c55e;
-    --grid:#1e2431;
-    --grid-ax:#2a3242;
-    --ui-scale:1;
-    --pad:calc(12px * var(--ui-scale));
-    --gap:calc(12px * var(--ui-scale));
-    --btnh:calc(44px * var(--ui-scale));
-    --radius:calc(14px * var(--ui-scale));
-    --fs:calc(14px * var(--ui-scale));
+    --pulse:#22c55e; --grid:#1e2431;
+    --pad:8px; --gap:8px; --btnh:36px; --radius:12px; --fs:13px;
+    --title:14px; --small:12px;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -28,37 +22,32 @@
   .container{
     width:100%;min-height:100vh;margin:0 auto;padding:var(--pad);
     display:grid;gap:var(--gap);
-    grid-template-columns:minmax(0,1fr) clamp(360px,40vw,680px);
-    align-items:start;max-width:1800px;
+    grid-template-columns:minmax(0,1fr) clamp(300px,36vw,520px);
+    align-items:start;max-width:1700px;
   }
-  @media (max-width:1150px){ .container{grid-template-columns:1fr} }
+  @media (max-width:1150px){
+    .container{grid-template-columns:1fr; gap:4px;}
+  }
 
   .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--bd);border-radius:var(--radius);min-width:0}
-  .canvas-wrap{padding:calc(8px * var(--ui-scale))}
-  /* Belangrijk voor mobiel: geen aspect-ratio forceren; JS regelt de hoogte. */
-  #canvas{
-    display:block;
-    width:100%;
-    height:auto;
-    border-radius:calc(10px * var(--ui-scale));
-    image-rendering:auto;
-    touch-action:none; /* voorkomt scroll/zoom tijdens tekenen */
-  }
+  .canvas-wrap{padding:6px}
+  #canvas{display:block;width:100%;height:auto;aspect-ratio:1040/600;border-radius:10px;touch-action:none;background:var(--canvas)}
 
-  .panel{padding:var(--pad);display:flex;flex-direction:column;gap:var(--gap)}
-  .section{background:var(--ctrl);border:1px solid var(--bd);border-radius:calc(12px * var(--ui-scale));padding:var(--pad);display:flex;flex-direction:column;gap:calc(10px * var(--ui-scale));min-width:0}
-  .row{display:flex;gap:calc(10px * var(--ui-scale));align-items:center}
+  .panel{padding:var(--pad);display:flex;flex-direction:column;gap:var(--gap);overflow:auto}
+  .section{background:var(--ctrl);border:1px solid var(--bd);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+
+  .row{display:flex;gap:6px;align-items:center;flex-wrap:nowrap}
   .row.equal>*{flex:1 1 0;min-width:0}
 
-  input,button{
+  input,button,select{
     height:var(--btnh);
-    border-radius:calc(10px * var(--ui-scale));
+    border-radius:9px;
     border:1px solid #1a1f2a;
-    background:#121620;color:var(--fg);
-    padding:0 calc(12px * var(--ui-scale));
-    font:inherit;outline:none;
+    background:#121620;
+    color:var(--fg);
+    padding:0 10px;
+    font:inherit;outline:none;min-width:0;max-width:100%;
   }
-  input::placeholder{color:#667084}
   button{cursor:pointer;transition:transform .04s,background-color .15s,border-color .15s;white-space:nowrap;text-align:center}
   .btn-primary{background:#151b28;border-color:#202638}
   .btn-primary:hover{background:#192132;border-color:#2a3550}
@@ -66,20 +55,33 @@
   .btn-plain{background:#121620;border-color:#1a1f2a}
   .btn-plain:hover{background:#151a24;border-color:#212836}
 
-  .zones{display:grid;grid-template-columns:1fr;gap:calc(10px * var(--ui-scale))}
-  .zone-btn.active{background:#151e2c;border-color:#2a3550}
-
-  .status{font-size:calc(12px * var(--ui-scale));color:var(--muted);display:flex;align-items:center;gap:calc(8px * var(--ui-scale))}
-  .dot{width:calc(8px * var(--ui-scale));height:calc(8px * var(--ui-scale));border-radius:50%;background:#343a46}
-  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)}
-  .title{font-size:calc(16px * var(--ui-scale));font-weight:600;color:#cfd6e2}
+  select{
+    cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;
+    background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5' stroke='%23cfd6e2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 8px center;padding-right:26px;
+  }
 
   input[type=number]::-webkit-outer-spin-button,
-  input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
-  input[type=number]{ -moz-appearance:textfield; appearance:textfield; }
+  input[type=number]::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+  input[type=number]{ -moz-appearance: textfield; appearance:textfield; }
 
-  /* kleine extra safeguard in webviews */
-  img,canvas{max-width:100%;height:auto}
+  .title{font-size:var(--title);font-weight:600;color:#cfd6e2}
+  .status{font-size:var(--small);color:var(--muted);display:flex;align-items:center;gap:6px}
+  .dot{width:7px;height:7px;border-radius:50%;background:#343a46}
+  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)}
+
+  .zones{display:grid;grid-template-columns:1fr;gap:6px}
+  .zone-btn{height:34px;font-size:13px}
+  .zone-btn.active{background:#151e2c;border-color:#2a3550}
+
+  .row.equal .btn-primary, .row.equal .btn-plain { min-width:96px; }
+
+  @media (max-width:480px){
+    :root{ --fs:13px; --btnh:34px; }
+    .canvas-wrap{padding:4px;}
+    .panel{padding:6px; gap:6px;}
+    .zones{gap:6px;}
+  }
 </style>
 </head>
 <body>
@@ -88,20 +90,20 @@
       <canvas id="canvas"></canvas>
     </div>
 
-    <div id="main" class="card panel">
+    <div id="panelCard" class="card panel">
       <div class="section">
         <div class="title">Device</div>
-        <div class="row equal">
-          <input id="host" placeholder="Host IP (e.g., 192.168.0.44)" />
-          <button id="connectBtn" class="btn-primary">Connect</button>
+        <div class="row">
+          <select id="selDevices" aria-label="Device list" style="flex:1"></select>
         </div>
+        <div class="status"><span id="sDot" class="dot"></span><span id="sText">Searching…</span></div>
       </div>
 
       <div class="section">
-        <div class="title">Detection Range</div>
+        <div class="title">Detection range</div>
         <div class="row equal">
-          <input id="rangeInput" type="number" min="0" max="600" step="1" placeholder="0 – 600 cm" />
-          <button id="rangeSetBtn" class="btn-primary">Set</button>
+          <input id="rangeInput" type="number" min="0" max="600" step="1" placeholder="0 – 600 cm" inputmode="numeric" />
+          <button id="rangeSetBtn" class="btn-primary">Save</button>
         </div>
       </div>
 
@@ -122,152 +124,275 @@
           <button id="clearBtn" class="btn-plain">Clear</button>
         </div>
       </div>
-
-      <div class="section">
-        <div class="status">
-          <span id="sDot" class="dot"></span>
-          <span id="sText">Idle</span>
-        </div>
-      </div>
     </div>
   </div>
 
 <script>
 (()=> {
-  // Wereld-ruimte (cm)
-  const X_MIN=-520, X_MAX=520, Y_MIN=0, Y_MAX=600, WORLD_W=X_MAX-X_MIN, WORLD_H=Y_MAX-Y_MIN;
+  const X_MIN=-520, X_MAX=520, Y_MIN=0, Y_MAX=600;
+  const WORLD_W=X_MAX-X_MIN, WORLD_H=Y_MAX-Y_MIN;
   const MAX_RANGE=600, MAX_POINTS=8, FOV_DEG=120, GRID=100;
 
   const $=(id)=>document.getElementById(id);
-  const hostEl=$('host'), connectBtn=$('connectBtn'), saveBtn=$('saveBtn'), clearBtn=$('clearBtn');
+  const sel=$('selDevices');
+  const saveBtn=$('saveBtn'), clearBtn=$('clearBtn');
   const rangeInput=$('rangeInput'), rangeSetBtn=$('rangeSetBtn');
-  const zoneBtns=[...document.querySelectorAll('[data-zone]')];
+  const sDot=$('sDot'), sText=$('sText');
   const cvs=$('canvas'), ctx=cvs.getContext('2d',{alpha:true,desynchronized:true});
-  const canvasCard=$('canvasCard'), sDot=$('sDot'), sText=$('sText'), main=$('main');
+  const canvasCard=$('canvasCard'), panelCard=$('panelCard');
+  const zoneBtns=[...document.querySelectorAll('.zone-btn')];
 
-  const livePos={1:{x:NaN,y:NaN},2:{x:NaN,y:NaN},3:{x:NaN,y:NaN}};
+  let cssW=0, cssH=0, dpr=1;
+  let currentZone='1';
   const zones={'1':[],'2':[],'3':[],'excl':[]};
-  let dragIdx=null, currentZone='1', detRange=MAX_RANGE, rangeId=null;
+  const livePos={1:{x:NaN,y:NaN},2:{x:NaN,y:NaN},3:{x:NaN,y:NaN}};
+  let selectedDevice=null;
+  let entities=[];
+  let detRange=MAX_RANGE;
+  let saving=false;
 
-  const saved=localStorage.getItem('zone_device_host')||''; if(saved) hostEl.value=saved;
+  const BOOT_KEY='sensy_boot_reloaded_once';
 
-  function device(){ let h=hostEl.value.trim(); if(!h) return ''; if(!/^https?:\/\//i.test(h)) h='http://'+h; return h.replace(/\/+$/,''); }
+  let liveTimer=null, livePauseDepth=0, liveInFlight=false;
+  const LIVE_INTERVAL_MS=30;
+
+  function pauseLive(){ livePauseDepth++; if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
+  function resumeLive(){
+    livePauseDepth=Math.max(0, livePauseDepth-1);
+    if(livePauseDepth===0 && selectedDevice && !liveTimer){ liveTimer=setInterval(fetchTargets, LIVE_INTERVAL_MS); }
+  }
+  const pauseDuring=(fn)=>async(...a)=>{ pauseLive(); try{ return await fn(...a); } finally{ resumeLive(); } };
+
   function setStatus(kind,msg){ sDot.className='dot'+(kind?(' '+kind):''); sText.textContent=msg; }
-  const sleep=(ms)=>new Promise(res=>setTimeout(res,ms));
+
+  async function api(path, body, {retryOnError=true, reloadOnError=true}={}){
+    try{
+      const r = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body||{}) });
+      const text = await r.text();
+      if(!r.ok){
+        if ((r.status===500 || r.status===502) && retryOnError){ await new Promise(res=>setTimeout(res,200)); return api(path,body,{retryOnError:false,reloadOnError}); }
+        if ((r.status===500 || r.status===502) && reloadOnError && !localStorage.getItem(BOOT_KEY)){ localStorage.setItem(BOOT_KEY,'1'); location.reload(); await new Promise(()=>{}); }
+        let msg=r.status+' '+r.statusText; try{ const j=JSON.parse(text); msg=(j.error||msg)+(j.details?` (${j.details})`:''); }catch{}
+        throw new Error(msg);
+      }
+      localStorage.removeItem(BOOT_KEY);
+      const ct=r.headers.get('content-type')||'';
+      return ct.includes('application/json') ? JSON.parse(text) : text;
+    }catch(err){
+      if(reloadOnError && !localStorage.getItem(BOOT_KEY)){ localStorage.setItem(BOOT_KEY,'1'); location.reload(); await new Promise(()=>{}); }
+      throw err;
+    }
+  }
+
+  const TPL_LIST = `
+{% set out = namespace(items=[], ids=[]) %}
+{% for s in states %}
+  {% set dev = s.entity_id | device_id %}
+  {% if dev and (device_attr(dev,'manufacturer') or '') == 'Sensy-One' and (dev not in out.ids) %}
+    {% set name = device_attr(dev,'name_by_user') or device_attr(dev,'name') or dev %}
+    {% set model = device_attr(dev,'model') or '' %}
+    {% set out.items = out.items + [ { 'device_id': dev, 'name': name, 'model': model } ] %}
+    {% set out.ids = out.ids + [ dev ] %}
+  {% endif %}
+{% endfor %}
+{{ out.items | tojson }}
+  `.trim();
+
+  const targetsTemplate = (devId)=>(`
+{% set dev = '`+devId+`' %}
+{% set out = namespace(x1=0.0,y1=0.0,x2=0.0,y2=0.0,x3=0.0,y3=0.0) %}
+{% for s in states if (s.entity_id | device_id) == dev %}
+  {% set id = s.entity_id %}
+  {% if id.endswith('target_1_x') %}{% set out.x1 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_1_y') %}{% set out.y1 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_2_x') %}{% set out.x2 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_2_y') %}{% set out.y2 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_3_x') %}{% set out.x3 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_3_y') %}{% set out.y3 = (s.state | float(0)) %}{% endif %}
+{% endfor %}
+{{ {'1': {'x': out.x1, 'y': out.y1}, '2': {'x': out.x2, 'y': out.y2}, '3': {'x': out.x3, 'y': out.y3}} | tojson }}
+  `.trim());
+
+  async function fetchTargets(){
+    if(!selectedDevice || liveInFlight || document.visibilityState==='hidden') return;
+    liveInFlight=true;
+    try{
+      const tpl = targetsTemplate(selectedDevice.device_id);
+      const res = await api('api/template', { template: tpl }, {retryOnError:false, reloadOnError:false});
+      const obj = (typeof res === 'string') ? JSON.parse(res || '{}') : res;
+      let changed=false;
+      for(const n of [1,2,3]){
+        const x = Number(obj?.[String(n)]?.x);
+        const y = Number(obj?.[String(n)]?.y);
+        if(Number.isFinite(x) && x!==livePos[n].x){ livePos[n].x=x; changed=true; }
+        if(Number.isFinite(y) && y!==livePos[n].y){ livePos[n].y=y; changed=true; }
+      }
+      if(changed) enqueueDraw();
+    }catch(_e){ }
+    finally{ liveInFlight=false; }
+  }
+
+  async function loadDeviceEntitiesCore(device_id){
+    const rows = await api('api/device_entities', { device_id });
+    const arr = Array.isArray(rows) ? rows : JSON.parse(rows||'[]');
+    entities = arr.map(e => ({ entity_id:e.entity_id, domain:e.domain, state:e.state, attributes:e.attributes||{} }));
+  }
+  const loadDeviceEntities = pauseDuring(loadDeviceEntitiesCore);
+
+  const findEntityIdBySuffix = (suffix) => (entities.find(x => x.entity_id.endsWith(suffix))?.entity_id)||null;
+  function readNumberBySuffix(suffix){ const e=entities.find(x=>x.entity_id.endsWith(suffix)); if(!e) return null; const v=(typeof e.state==='number')?e.state:Number(e.state); return Number.isFinite(v)?v:null; }
+  async function setNumberBySuffix(suffix, value){
+    const id = findEntityIdBySuffix(suffix);
+    if(!id) throw new Error(`Entity not found: *${suffix}`);
+    await api('api/services/number/set_value', { entity_id: id, value });
+    const e = entities.find(x=>x.entity_id===id); if(e) e.state=String(value);
+  }
+
+  function zid(z){
+    if(z==='excl'){ return { label:'Exclusion Zone', count:'exclusion_zone_points_count', x:(i)=>`exclusion_zone_p${i}_x`, y:(i)=>`exclusion_zone_p${i}_y` }; }
+    return { label:`Zone ${z}`, count:`zone_${z}_points_count`, x:(i)=>`zone_${z}_p${i}_x`, y:(i)=>`zone_${z}_p${i}_y` };
+  }
+
+  async function loadDetectionRangeCore(){
+    let v = readNumberBySuffix('detection_range_cm'); if(v===null) v=readNumberBySuffix('detection_range');
+    detRange = Math.round(Math.max(0,Math.min(MAX_RANGE, v ?? MAX_RANGE)));
+    rangeInput.value = String(detRange);
+  }
+  const loadDetectionRange = pauseDuring(loadDetectionRangeCore);
+
+  async function setDetectionRangeCore(){
+    let val = Math.round(Number(rangeInput.value));
+    if(!Number.isFinite(val)) { setStatus('err','Invalid range'); return; }
+    val = Math.max(0,Math.min(MAX_RANGE,val));
+    try{
+      setStatus('', 'Saving range…');
+      try{ await setNumberBySuffix('detection_range_cm', val); } catch{ await setNumberBySuffix('detection_range', val); }
+      detRange = val; setStatus('ok', `Range: ${val} cm`); enqueueDraw();
+    }catch(e){ setStatus('err', e.message||'Failed to save range'); }
+  }
+  const setDetectionRange = pauseDuring(setDetectionRangeCore);
+
+  async function loadZoneCore(z){
+    const id=zid(z);
+    const n = Math.max(0, Math.min(MAX_POINTS, Math.round(readNumberBySuffix(id.count) || 0)));
+    const pts=[];
+    for(let i=1;i<=n;i++){
+      const x = Math.round(readNumberBySuffix(id.x(i)) ?? 0);
+      const y = Math.round(readNumberBySuffix(id.y(i)) ?? 0);
+      pts.push({x:clamp(x,X_MIN,X_MAX), y:clamp(y,Y_MIN,Y_MAX)});
+    }
+    zones[z]=pts;
+  }
+  const loadZone = pauseDuring(loadZoneCore);
+
+  async function loadAllCore(){
+    if(!selectedDevice){ setStatus('err','Select a device'); return; }
+    setStatus('', 'Loading…');
+    await loadDetectionRangeCore();
+    for(const z of ['1','2','3','excl']) await loadZoneCore(z);
+    enqueueDraw();
+    setStatus('ok','Ready');
+  }
+  const loadAll = pauseDuring(loadAllCore);
+
+  async function saveCurrentZoneCore(){
+    if(saving) return;
+    if(!selectedDevice){ setStatus('err','No device'); return; }
+    const id = zid(currentZone);
+    const pts = zones[currentZone]||[];
+    const n = Math.min(MAX_POINTS, pts.length);
+    try{
+      saving=true; saveBtn.disabled=true;
+      setStatus('', `Saving ${id.label}…`);
+      const tasks=[];
+      for(let i=1;i<=MAX_POINTS;i++){
+        const p=pts[i-1]||{x:0,y:0};
+        tasks.push(setNumberBySuffix(id.x(i), Math.round(clamp(p.x||0,X_MIN,X_MAX))));
+        tasks.push(setNumberBySuffix(id.y(i), Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
+      }
+      await Promise.allSettled(tasks);
+      await setNumberBySuffix(id.count, n);
+      setStatus('ok', `Saved (${n} point${n===1?'':'s'})`);
+      await loadZoneCore(currentZone);
+      enqueueDraw();
+    }catch(e){ setStatus('err', e.message||'Save failed'); }
+    finally{ saving=false; saveBtn.disabled=false; }
+  }
+  const saveCurrentZone = pauseDuring(saveCurrentZoneCore);
+
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const cssVar=(name)=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-  async function apiGet(domain,id){ const url=`${device()}/${domain}/${id}`; const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(`GET ${url} -> ${r.status}`); return r.json(); }
-  async function apiPost(domain,id,method,params={}){ const qs=new URLSearchParams(params).toString(); const url=`${device()}/${domain}/${id}/${method}${qs?`?${qs}`:''}`; const r=await fetch(url,{method:'POST'}); if(!r.ok) throw new Error(`POST ${url} -> ${r.status}`); }
-  async function postNumberWithRetry(id,value,tries=3,baseDelay=60){ let attempt=0,delay=baseDelay; for(;;){ try{ await apiPost('number',id,'set',{value}); return; }catch(e){ attempt++; if(attempt>=tries) throw e; await sleep(delay); delay*=2; } } }
-
-  function zoneIds(z){ if(z==='excl'){ return {label:'Exclusion Zone',count:'exclusion_zone_points_count',x:i=>`exclusion_zone_p${i}_x`,y:i=>`exclusion_zone_p${i}_y`}; } return {label:`Zone ${z}`,count:`zone_${z}_points_count`,x:i=>`zone_${z}_p${i}_x`,y:i=>`zone_${z}_p${i}_y`}; }
-
-  let cssW=0, cssH=0;
-  function applyUiScale(scale){ document.documentElement.style.setProperty('--ui-scale',String(scale)); }
-  function twoColumn(){ return window.matchMedia('(min-width: 1150px)').matches; }
-
-  // --- RESPONSIVE CANVAS (mobiel/retina) ---
   function resizeCanvas(){
-    // beschikbare ruimte rekening houdend met paddings
-    const cs = getComputedStyle(canvasCard);
-    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-    const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-    const maxW = Math.max(300, canvasCard.clientWidth - padX);
-    const maxH = Math.max(280, Math.floor(window.innerHeight * 0.70) - padY);
-
-    const sc = Math.min(maxW / WORLD_W, maxH / WORLD_H);
-    cssW = Math.max(360, Math.floor(WORLD_W * sc));
-    cssH = Math.max(280, Math.floor(WORLD_H * sc));
-
-    // echte (niet-afgeronde) DPR voor scherpte en juiste scaling
-    const dpr = window.devicePixelRatio || 1;
-    cvs.width  = Math.round(cssW * dpr);
-    cvs.height = Math.round(cssH * dpr);
-    cvs.style.width  = cssW + 'px';
-    cvs.style.height = cssH + 'px';
+    const pad=12;
+    const cardRect = canvasCard.getBoundingClientRect();
+    const maxW = Math.max(320, cardRect.width - pad);
+    const maxH = Math.max(260, Math.min(window.innerHeight - 2*pad, (window.innerHeight*0.8)));
+    const scale = Math.min(maxW / WORLD_W, maxH / WORLD_H);
+    cssW = Math.floor(WORLD_W * scale);
+    cssH = Math.floor(WORLD_H * scale);
+    if (cvs.style.width !== cssW+'px') cvs.style.width = cssW+'px';
+    if (cvs.style.height !== cssH+'px') cvs.style.height = cssH+'px';
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    const devW = Math.max(2, Math.round(cssW * dpr)), devH = Math.max(2, Math.round(cssH * dpr));
+    if (cvs.width !== devW) cvs.width = devW;
+    if (cvs.height !== devH) cvs.height = devH;
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
 
-  function fitPanelScale(){
-    if(!twoColumn()){ applyUiScale(1); main.style.height='auto'; return; }
-    const base=1100; let scale=Math.max(0.6,Math.min(1.6,cssW/base));
-    applyUiScale(scale);
-    const h=canvasCard.getBoundingClientRect().height;
-    let guard=20;
-    while(main.scrollHeight>h && scale>0.6 && guard-->0){
-      scale=Math.max(0.6, +(scale-0.05).toFixed(2));
-      applyUiScale(scale);
-    }
-    main.style.height=Math.round(h)+'px';
+  function syncLayout(){
+    resizeCanvas();
+    enqueueDraw();
+    const twoCols = matchMedia('(min-width:1151px)').matches;
+    panelCard.style.height = twoCols ? (Math.round(cvs.getBoundingClientRect().height + 12) + 'px') : 'auto';
   }
 
-  const toPxX=x=>(x-X_MIN)/WORLD_W*cssW, toPxY=y=>(y-Y_MIN)/WORLD_H*cssH;
-  const toCmX=px=>X_MIN+(px/cssW)*WORLD_W, toCmY=py=>Y_MIN+(py/cssH)*WORLD_H;
-
-  // Ronding-clip zodat FOV/Zones "in hun bubbel" blijven (canvas border-radius)
-  function clipCanvasRoundedRect(){
-    const br = getComputedStyle(cvs).borderTopLeftRadius;
-    const r = Math.max(0, parseFloat(br) || 0);
-    if(!r){ return ()=>{}; }
-    const w = cssW, h = cssH;
-    ctx.save();
-    ctx.beginPath();
-    // pad voor rounded rect
-    ctx.moveTo(r,0);
-    ctx.lineTo(w - r, 0);
-    ctx.quadraticCurveTo(w,0,w,r);
-    ctx.lineTo(w, h - r);
-    ctx.quadraticCurveTo(w,h,w - r,h);
-    ctx.lineTo(r, h);
-    ctx.quadraticCurveTo(0,h,0,h - r);
-    ctx.lineTo(0, r);
-    ctx.quadraticCurveTo(0,0,r,0);
-    ctx.closePath();
-    ctx.clip();
-    // return restore functie
-    return ()=>ctx.restore();
-  }
-
-  function makeFovPoints(range){
-    const pts=[], half=FOV_DEG/2, rad=d=>d*Math.PI/180;
-    for(let a=half;a>=-half;a-=1.5) pts.push({x:range*Math.sin(rad(a)),y:range*Math.cos(rad(a))});
-    // terug naar oorsprong (sensor) langs randen
-    for(let t=1;t>=0;t-=0.1){ const a=-half; pts.push({x:range*Math.sin(rad(a))*t,y:range*Math.cos(rad(a))*t}); }
-    for(let t=0;t<=1;t+=0.1){ const a=+half; pts.push({x:range*Math.sin(rad(a))*t,y:range*Math.cos(rad(a))*t}); }
-    return pts;
-  }
+  const toPxX = (x)=> (x - X_MIN) / WORLD_W * cssW;
+  const toPxY = (y)=> (y - Y_MIN) / WORLD_H * cssH;
+  const toCmX = (px)=> X_MIN + (px / cssW) * WORLD_W;
+  const toCmY = (py)=> Y_MIN + (py / cssH) * WORLD_H;
 
   function drawGrid(){
     ctx.save();
+    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
     ctx.lineWidth = 1;
     const gridColor = cssVar('--grid') || '#1e2431';
-    const alpha = 0.6;
-
-    for(let x = Math.ceil(X_MIN/GRID)*GRID; x <= X_MAX; x += GRID){
+    const x0 = Math.ceil(X_MIN/GRID)*GRID, y0 = Math.ceil(Y_MIN/GRID)*GRID;
+    for(let x = x0; x <= X_MAX; x += GRID){
       const px = Math.round(toPxX(x)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(px, Math.round(toPxY(Y_MIN)) + 0.5);
       ctx.lineTo(px, Math.round(toPxY(Y_MAX)) + 0.5);
-      ctx.strokeStyle = gridColor;
-      ctx.globalAlpha = alpha;
-      ctx.stroke();
+      ctx.strokeStyle = gridColor; ctx.globalAlpha = 0.6; ctx.stroke();
     }
-
-    for(let y = Math.ceil(Y_MIN/GRID)*GRID; y <= Y_MAX; y += GRID){
+    for(let y = y0; y <= Y_MAX; y += GRID){
       const py = Math.round(toPxY(y)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(Math.round(toPxX(X_MIN)) + 0.5, py);
       ctx.lineTo(Math.round(toPxX(X_MAX)) + 0.5, py);
-      ctx.strokeStyle = gridColor;
-      ctx.globalAlpha = alpha;
-      ctx.stroke();
+      ctx.strokeStyle = gridColor; ctx.globalAlpha = 0.6; ctx.stroke();
     }
-
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    ctx.globalAlpha = 1; ctx.restore();
   }
 
+  function makeFovPoints(range){
+    const pts=[], half=FOV_DEG/2, rad=d=>d*Math.PI/180;
+    for(let a=half;a>=-half;a-=1.2) pts.push({x:range*Math.sin(rad(a)),y:range*Math.cos(rad(a))});
+    pts.push({x:0,y:0},{x:0,y:0});
+    return pts;
+  }
+  function drawFov(range, lighter=false){
+    const r = Math.max(0, Math.min(MAX_RANGE, range|0));
+    const pts=makeFovPoints(r);
+    ctx.beginPath();
+    ctx.moveTo(toPxX(pts[0].x),toPxY(pts[0].y));
+    for(let i=1;i<pts.length;i++) ctx.lineTo(toPxX(pts[i].x),toPxY(pts[i].y));
+    ctx.closePath();
+    ctx.globalAlpha = lighter ? 0.08 : 0.15;
+    ctx.fillStyle=cssVar('--fov');
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
   function drawPolygon(pts,style){
     if(pts.length<2) return;
     ctx.beginPath(); ctx.moveTo(toPxX(pts[0].x),toPxY(pts[0].y));
@@ -279,281 +404,187 @@
   }
   function zoneStyle(key,active){
     const isExcl=key==='excl';
-    if(active){ return isExcl?{fill:cssVar('--z-excl-fill'),stroke:cssVar('--z-excl'),width:2.4,fillAlpha:1}:{fill:cssVar('--z-norm-fill'),stroke:cssVar('--z-norm'),width:2.4,fillAlpha:1}; }
-    return isExcl?{fill:cssVar('--z-excl-dim-fill'),stroke:cssVar('--z-excl-dim'),width:1.6,fillAlpha:1}:{fill:cssVar('--z-norm-dim-fill'),stroke:cssVar('--z-norm-dim'),width:1.6,fillAlpha:1};
+    if(active){ return isExcl?{fill:cssVar('--z-excl-fill'),stroke:cssVar('--z-excl'),width:2,fillAlpha:1}:{fill:cssVar('--z-norm-fill'),stroke:cssVar('--z-norm'),width:2,fillAlpha:1}; }
+    return isExcl?{fill:cssVar('--z-excl-dim-fill'),stroke:cssVar('--z-excl-dim'),width:1.2,fillAlpha:1}:{fill:cssVar('--z-norm-dim-fill'),stroke:cssVar('--z-norm-dim'),width:1.2,fillAlpha:1};
   }
+
+  function targetRadius(){ return matchMedia('(max-width: 768px)').matches ? 5 : 5; }
 
   function drawHandles(pts){
     const color=currentZone==='excl'?cssVar('--z-excl'):cssVar('--z-norm');
     for(let i=0;i<pts.length;i++){
       const px=toPxX(pts[i].x), py=toPxY(pts[i].y);
-      ctx.beginPath(); ctx.arc(px,py,7,0,Math.PI*2);
+      ctx.beginPath(); ctx.arc(px,py,5.5,0,Math.PI*2);
       ctx.fillStyle=i===dragIdx?'#22c55e':color; ctx.fill();
     }
   }
-
   function drawTargets(){
     const color = cssVar('--pulse') || '#22c55e';
-    const now = performance.now(), period = 1200, baseR = 6, ringMax = 18;
+    const r = targetRadius();
     for (const n of [1,2,3]){
       const p = livePos[n];
-      if(!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x===0 || p.y===0) continue;
+      if(!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x===0&&p.y===0)) continue;
       const px=toPxX(clamp(p.x,-520,520)), py=toPxY(clamp(p.y,0,600));
-
-      ctx.beginPath(); ctx.arc(px,py,baseR,0,Math.PI*2);
-      ctx.fillStyle=color; ctx.fill();
-
-      const phase=((now+n*180)%period)/period, ease=1-Math.pow(1-phase,2);
-      const r1=baseR+ease*ringMax, a1=0.35*(1-ease);
-      ctx.beginPath(); ctx.arc(px,py,r1,0,Math.PI*2);
-      ctx.strokeStyle=color; ctx.globalAlpha=a1; ctx.lineWidth=2; ctx.stroke();
-
-      const phase2=((now+600+n*180)%period)/period, ease2=1-Math.pow(1-phase2,2);
-      const r2=baseR+ease2*ringMax, a2=0.25*(1-ease2);
-      ctx.beginPath(); ctx.arc(px,py,r2,0,Math.PI*2);
-      ctx.globalAlpha=a2; ctx.lineWidth=2; ctx.stroke();
-
-      ctx.globalAlpha=1;
+      ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
     }
   }
 
-  // FOV tekent altijd mee met schaal; 'ref' is lichte MAX_RANGE-bubble.
-  function drawFov(range, {mode='fill'}={}){
-    const pts = makeFovPoints(range);
-    ctx.beginPath();
-    ctx.moveTo(toPxX(pts[0].x), toPxY(pts[0].y));
-    for (let i=1;i<pts.length;i++) ctx.lineTo(toPxX(pts[i].x), toPxY(pts[i].y));
-    ctx.closePath();
-
-    if (mode==='ref') { // lichte referentie (max)
-      ctx.globalAlpha = 0.06;
-      ctx.fillStyle = cssVar('--fov');
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      return;
-    }
-
-    // actuele coverage (detRange)
-    ctx.globalAlpha = 0.16;
-    ctx.fillStyle = cssVar('--fov');
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
+  let drawQueued=false;
+  function enqueueDraw(){ if(drawQueued) return; drawQueued=true; requestAnimationFrame(()=>{ drawQueued=false; draw(); }); }
 
   function draw(){
-    const restoreClip = clipCanvasRoundedRect(); // alles binnen de "bubbel"
-    ctx.clearRect(0,0,cssW,cssH);
-    ctx.fillStyle=cssVar('--canvas'); ctx.fillRect(0,0,cssW,cssH);
-
+    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
     drawGrid();
-    // lichte MAX-range referentie
-    drawFov(MAX_RANGE,{mode:'ref'});
-    // actuele FOV (meeschaalt en blijft binnen clip)
-    drawFov(clamp(detRange,0,MAX_RANGE));
-
-    // zones
+    drawFov(MAX_RANGE,false);
+    if(detRange<MAX_RANGE) drawFov(detRange,true);
     for(const key of ['1','2','3','excl']){ const style=zoneStyle(key,key===currentZone); if(key!==currentZone) drawPolygon(zones[key],style); }
     drawPolygon(zones[currentZone],zoneStyle(currentZone,true));
     drawHandles(zones[currentZone]);
-
-    // live targets
     drawTargets();
-
-    restoreClip && restoreClip();
   }
 
-  function localMouse(evt){
-    const r=cvs.getBoundingClientRect(), sx=cssW/r.width, sy=cssH/r.height;
-    return {x:(evt.clientX-r.left)*sx,y:(evt.clientY-r.top)*sy};
+  new ResizeObserver(syncLayout).observe(canvasCard);
+  window.addEventListener('resize', syncLayout);
+
+  let dragIdx=null;
+  let dragWhole=false;
+  let lastPX=0, lastPY=0;
+
+  function localPoint(clientX, clientY){
+    const r=cvs.getBoundingClientRect(), sx=(cvs.width/dpr)/r.width, sy=(cvs.height/dpr)/r.height;
+    return {x:(clientX-r.left)*sx,y:(clientY-r.top)*sy};
   }
   function nearestIdx(px,py){
     const pts=zones[currentZone]; let best=-1,dmin=14;
     for(let i=0;i<pts.length;i++){ const dx=toPxX(pts[i].x)-px, dy=toPxY(pts[i].y)-py, d=Math.hypot(dx,dy); if(d<dmin){ dmin=d; best=i; } }
     return best;
   }
-  function onDown(e){
-    const {x:mx,y:my}=localMouse(e), idx=nearestIdx(mx,my), pts=zones[currentZone];
-    if(idx>=0){ dragIdx=idx; draw(); return; }
+  function pointInPoly(pts, px, py){
+    if(!pts || pts.length<3) return false;
+    const x=toCmX(px), y=toCmY(py);
+    let inside=false;
+    for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+      const xi=pts[i].x, yi=pts[i].y, xj=pts[j].x, yj=pts[j].y;
+      const intersect=((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi+1e-9) + xi);
+      if(intersect) inside=!inside;
+    }
+    return inside;
+  }
+  function hitZoneAt(px,py){
+    const order=[currentZone, '1','2','3','excl'].filter((v,i,self)=>self.indexOf(v)===i);
+    for(const z of order){ const pts=zones[z]; if(pointInPoly(pts,px,py)) return z; }
+    return null;
+  }
+  function setCurrentZone(z){
+    currentZone=z;
+    zoneBtns.forEach(b=> b.classList.toggle('active', b.dataset.zone===z));
+    setStatus('ok', `${z==='excl'?'Exclusion':'Zone '+z} selected`);
+  }
+
+  function pointerDown(px,py){
+    if(!selectedDevice) return;
+    lastPX=px; lastPY=py; dragWhole=false;
+    const idx=nearestIdx(px,py), pts=zones[currentZone];
+    if(idx>=0){ dragIdx=idx; enqueueDraw(); return; }
+
+    const hit = hitZoneAt(px,py);
+    if(hit){
+      if(hit!==currentZone){ setCurrentZone(hit); }
+      dragWhole=true; dragIdx=null; return;
+    }
+
     if(pts.length>=MAX_POINTS) return;
-    const x=Math.round(toCmX(mx)), y=Math.round(toCmY(my));
-    pts.push({x:clamp(x,X_MIN,X_MAX),y:clamp(y,Y_MIN,Y_MAX)}); draw();
+    const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
+    pts.push({x:clamp(x,X_MIN,X_MAX),y:clamp(y,Y_MIN,Y_MAX)}); enqueueDraw();
   }
-  function onMove(e){
-    if(dragIdx==null) return;
-    const {x:mx,y:my}=localMouse(e), pts=zones[currentZone];
-    pts[dragIdx]={x:Math.round(clamp(toCmX(mx),X_MIN,X_MAX)),y:Math.round(clamp(toCmY(my),Y_MIN,Y_MAX))}; draw();
-  }
-  function onUp(){ dragIdx=null; }
-
-  // Pointer Events: werkt voor muis en touch
-  cvs.addEventListener('pointerdown', (e)=>{ e.preventDefault(); cvs.setPointerCapture?.(e.pointerId); onDown(e); });
-  window.addEventListener('pointermove', (e)=>{ onMove(e); });
-  window.addEventListener('pointerup',   (e)=>{ onUp(e); });
-
-  async function loadOne(z){
-    const id=zoneIds(z), arr=[];
-    const cnt=await apiGet('number',id.count);
-    const n=Math.max(0,Math.min(MAX_POINTS,Math.round(Number(cnt.value)??0)));
-    for(let i=1;i<=n;i++){
-      const vx=await apiGet('number',id.x(i)), vy=await apiGet('number',id.y(i));
-      arr.push({x:Math.round(clamp(Number(vx.value)||0,X_MIN,X_MAX)),y:Math.round(clamp(Number(vy.value)||0,Y_MIN,Y_MAX))});
-    }
-    zones[z]=arr;
-  }
-  async function getNumberWithFallback(primaryId,fallbackId){
-    try{ const a=await apiGet('number',primaryId); return {value:Number(a.value), id:primaryId}; }
-    catch(e){ if(!fallbackId) throw e; const b=await apiGet('number',fallbackId); return {value:Number(b.value), id:fallbackId}; }
-  }
-  async function loadDetectionRange(){
-    try{
-      setStatus('', 'Loading detection range…');
-      const r=await getNumberWithFallback('detection_range_cm','detection_range');
-      detRange=Math.round(clamp(Number(r.value)||0,0,MAX_RANGE));
-      rangeId=r.id; rangeInput.value=String(detRange);
-      setStatus('ok',`Range: ${detRange} cm`);
-    }catch(e){
-      detRange=MAX_RANGE; rangeId='detection_range_cm'; rangeInput.value=String(detRange);
-      setStatus('err','Range load failed (using 600)');
-    }
-  }
-  async function loadAll(){
-    const base=device(); if(!base){ setStatus('err','Enter a host/IP'); return; }
-    try{
-      setStatus('', 'Loading…');
-      await loadDetectionRange();
-      for(const z of ['1','2','3','excl']) await loadOne(z);
-      draw();
-      setStatus('ok','Loaded');
-    }catch(e){ setStatus('err','Load failed'); }
-  }
-
-  let saving=false;
-  async function saveCurrentZoneThrottled(){
-    if(saving) return;
-    const base=device(); if(!base){ setStatus('err','Enter a host/IP'); return; }
-    const id=zoneIds(currentZone), pts=zones[currentZone]||[], n=Math.min(MAX_POINTS,pts.length);
-    try{
-      saving=true; saveBtn.disabled=true;
-      setStatus('',`Saving ${id.label}… (pausing stream)`); stopEventStream(); await sleep(120);
-      for(let i=1;i<=MAX_POINTS;i++){
-        const p=pts[i-1]||{x:0,y:0};
-        const vx=Math.round(clamp(p.x||0,X_MIN,X_MAX)), vy=Math.round(clamp(p.y||0,Y_MIN,Y_MAX));
-        await postNumberWithRetry(id.x(i),vx); await sleep(50);
-        await postNumberWithRetry(id.y(i),vy); await sleep(50);
+  function pointerMove(px,py){
+    if(dragIdx==null && !dragWhole) return;
+    if(dragWhole){
+      const dx = toCmX(px)-toCmX(lastPX);
+      const dy = toCmY(py)-toCmY(lastPY);
+      const pts = zones[currentZone];
+      let canMove=true;
+      for(const p of pts){
+        const nx=clamp(p.x+dx,X_MIN,X_MAX);
+        const ny=clamp(p.y+dy,Y_MIN,Y_MAX);
+        if(nx!==p.x+dx || ny!==p.y+dy){ canMove=false; break; }
       }
-      await postNumberWithRetry(id.count,n);
-      setStatus('ok',`Saved ${id.label} (${n})`);
-      await sleep(150); await loadAll();
-    }catch(e){
-      setStatus('err',`Save failed: ${e.message||e}`);
-    }finally{
-      await sleep(120); startEventStream(); saveBtn.disabled=false; saving=false;
+      if(canMove){
+        for(let i=0;i<pts.length;i++){ pts[i]={x:pts[i].x+dx, y:pts[i].y+dy}; }
+        lastPX=px; lastPY=py; enqueueDraw();
+      }
+      return;
     }
+    const pts=zones[currentZone];
+    pts[dragIdx]={x:Math.round(clamp(toCmX(px),X_MIN,X_MAX)),y:Math.round(clamp(toCmY(py),Y_MIN,Y_MAX))}; enqueueDraw();
   }
+  function pointerUp(){ dragIdx=null; dragWhole=false; }
 
-  async function setRange(){
-    const base=device(); if(!base){ setStatus('err','Enter a host/IP'); return; }
-    let val=Math.round(Number(rangeInput.value));
-    if(!Number.isFinite(val)){ setStatus('err','Invalid range'); return; }
-    val=clamp(val,0,MAX_RANGE);
-    try{
-      rangeSetBtn.disabled=true;
-      setStatus('', 'Saving range… (pausing stream)');
-      stopEventStream(); await sleep(120);
-      const id=rangeId||'detection_range_cm';
-      try{ await postNumberWithRetry(id,val); }
-      catch(e){ const alt=id==='detection_range_cm'?'detection_range':'detection_range_cm'; await postNumberWithRetry(alt,val); rangeId=alt; }
-      detRange=val; rangeInput.value=String(detRange); draw();
-      setStatus('ok',`Range set to ${detRange} cm`);
-      await sleep(120);
-    }catch(e){
-      setStatus('err','Failed to set range');
-    }finally{
-      startEventStream();
-      rangeSetBtn.disabled=false;
-    }
-  }
+  cvs.addEventListener('mousedown',e=>{ const p=localPoint(e.clientX,e.clientY); pointerDown(p.x,p.y); });
+  window.addEventListener('mousemove',e=>{ const p=localPoint(e.clientX,e.clientY); pointerMove(p.x,p.y); });
+  window.addEventListener('mouseup',pointerUp);
 
-  connectBtn.addEventListener('click',()=>{
-    const h=hostEl.value.trim(); if(!h){ setStatus('err','Enter a host/IP'); return; }
-    localStorage.setItem('zone_device_host',h);
-    setStatus('ok',`Device: ${device()}`);
-    loadAll(); startEventStream();
+  cvs.addEventListener('touchstart',e=>{ const t=e.touches[0]; if(!t) return; const p=localPoint(t.clientX,t.clientY); pointerDown(p.x,p.y); e.preventDefault(); }, {passive:false});
+  cvs.addEventListener('touchmove',e=>{ const t=e.touches[0]; if(!t) return; const p=localPoint(t.clientX,t.clientY); pointerMove(p.x,p.y); e.preventDefault(); }, {passive:false});
+  cvs.addEventListener('touchend',()=>pointerUp(), {passive:true});
+  cvs.addEventListener('touchcancel',()=>pointerUp(), {passive:true});
+
+  zoneBtns.forEach(btn=>{
+    btn.addEventListener('click', pauseDuring(async ()=>{
+      setCurrentZone(btn.dataset.zone);
+      if(selectedDevice){ await loadZoneCore(currentZone); enqueueDraw(); }
+    }));
   });
-  clearBtn.addEventListener('click',()=>{ zones[currentZone]=[]; draw(); setStatus('','Cleared'); });
-  zoneBtns.forEach(b=> b.addEventListener('click',()=> loadZone(b.dataset.zone)));
-  async function loadZone(z){
-    const base=device(); if(!base){ setStatus('err','Enter a host/IP'); return; }
-    currentZone=String(z);
-    zoneBtns.forEach(btn=> btn.classList.toggle('active',btn.dataset.zone===currentZone));
+  clearBtn.addEventListener('click', pauseDuring(async ()=>{ zones[currentZone]=[]; enqueueDraw(); setStatus('', 'Cleared'); }));
+  saveBtn.addEventListener('click', saveCurrentZone);
+  rangeSetBtn.addEventListener('click', setDetectionRange);
+  rangeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') setDetectionRange(); });
+
+  (async ()=>{
     try{
-      setStatus('',`Loading ${zoneIds(currentZone).label}…`);
-      await loadOne(currentZone); draw();
-      setStatus('ok',`Loaded (${zones[currentZone].length})`);
-    }catch(e){ setStatus('err','Load failed'); }
-  }
-  saveBtn.addEventListener('click',saveCurrentZoneThrottled);
-  rangeSetBtn.addEventListener('click',setRange);
-  rangeInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter') setRange(); });
+      pauseLive();
+      await api('api/template', { template: '{{ 1+1 }}' });
+      const res = await api('api/template', { template: TPL_LIST });
+      const list = typeof res === 'string' ? JSON.parse(res||'[]') : res;
 
-  function syncLayout(){
-    resizeCanvas();
-    if(!twoColumn()){ applyUiScale(1); main.style.height='auto'; }
-    else{
-      const base=1100; let scale=Math.max(0.6,Math.min(1.6,cssW/base));
-      applyUiScale(scale);
-      const h=canvasCard.getBoundingClientRect().height;
-      let guard=20;
-      while(main.scrollHeight>h && scale>0.6 && guard-->0){
-        scale=Math.max(0.6, +(scale-0.05).toFixed(2));
-        applyUiScale(scale);
-      }
-      main.style.height=Math.round(h)+'px';
-    }
-  }
+      sel.innerHTML = '';
+      list.sort((a,b)=> (a.name||a.device_id).localeCompare(b.name||b.device_id))
+        .forEach((d,i)=>{
+          const opt = document.createElement('option');
+          opt.value = d.device_id;
+          opt.textContent = d.name || d.device_id;
+          opt.dataset.model = d.model || '';
+          if(i===0) opt.selected = true;
+          sel.appendChild(opt);
+        });
 
-  let es=null;
-  const idMap={
-    'sensor-target_1_x':{n:1,k:'x'},'sensor-target_1_y':{n:1,k:'y'},
-    'sensor-target_2_x':{n:2,k:'x'},'sensor-target_2_y':{n:2,k:'y'},
-    'sensor-target_3_x':{n:3,k:'x'},'sensor-target_3_y':{n:3,k:'y'},
-  };
-  function startEventStream(){
-    stopEventStream();
-    const base = device(); if(!base){ setStatus('err','No device'); return; }
-    es = new EventSource(`${base}/events`, { withCredentials:false });
-    es.onopen  = ()=>{ setStatus('ok','SSE live'); };
-    es.onerror = ()=>{ setStatus('err','SSE disconnected'); };
-    es.addEventListener('state', (ev)=>{ try{ handleEvent(JSON.parse(ev.data)); }catch(e){} });
-    es.addEventListener('ping',  ()=>{});
-    es.onmessage = (ev)=>{ try{ handleEvent(JSON.parse(ev.data)); }catch(e){} };
-  }
-  function stopEventStream(){ if(es){ try{ es.close(); }catch{} es=null; } }
-  function handleEvent(msg){
-    const {id, value} = msg||{};
-    const m = idMap[id];
-    if(!m) return;
-    const num = (typeof value === 'number') ? value : Number(value);
-    if(Number.isNaN(num)) return;
-    const p = livePos[m.n];
-    p[m.k] = num;
-  }
+      if(!list.length){ setStatus('err','No devices found'); return; }
+      selectedDevice = {
+        device_id: sel.value,
+        name: sel.options[sel.selectedIndex]?.textContent || sel.value,
+        model: sel.options[sel.selectedIndex]?.dataset.model || ''
+      };
+      setStatus('', 'Loading device…');
+      await loadDeviceEntitiesCore(selectedDevice.device_id);
+      await loadAllCore();
+      setStatus('ok','Ready');
+    }catch(e){ setStatus('err','API error: '+(e.message||e)); }
+    finally{ syncLayout(); resumeLive(); }
+  })();
 
-  function animate(){
-    syncLayout();
-    draw();
-    requestAnimationFrame(animate);
-  }
+  sel.addEventListener('change', pauseDuring(async ()=>{
+    if(!sel.value){ setStatus('err','No device selected'); return; }
+    selectedDevice = { device_id: sel.value, name: sel.options[sel.selectedIndex]?.textContent || sel.value, model: sel.options[sel.selectedIndex]?.dataset.model || '' };
+    try{
+      setStatus('', 'Loading device…');
+      await loadDeviceEntitiesCore(selectedDevice.device_id);
+      await loadAllCore();
+    }catch(e){ setStatus('err','Load failed: '+(e.message||e)); }
+    finally{ syncLayout(); }
+  }));
 
-  const ro=new ResizeObserver(()=>{ syncLayout(); });
-  ro.observe(canvasCard);
-  window.addEventListener('resize',syncLayout);
-  window.matchMedia('(max-width: 1150px)').addEventListener('change',syncLayout);
-  window.matchMedia('(min-width: 1150px)').addEventListener('change',syncLayout);
-
-  // Start
-  animate();
-  zoneBtns[0].classList.add('active');
+  syncLayout();
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') pauseLive(); else resumeLive(); });
 })();
 </script>
 </body>
