@@ -6,48 +6,109 @@
 <title>Sensy-One Zone Editor (HA)</title>
 <style>
   :root{
+    --ui: 1;
     --bg:#06070a; --panel:#0a0c11; --panel-2:#0b0d12; --ctrl:#10131a; --bd:#171b22;
     --fg:#e6eaf1; --muted:#9aa3ad; --ok:#22c55e; --err:#ef4444;
     --canvas:#0a0d12; --fov:#5f7cff;
     --z-norm:#69b1ff; --z-norm-fill:rgba(105,177,255,.16); --z-norm-dim:#3c6fa9; --z-norm-dim-fill:rgba(105,177,255,.08);
     --z-excl:#ff6b6b; --z-excl-fill:rgba(255,107,107,.16); --z-excl-dim:#a84848; --z-excl-dim-fill:rgba(255,107,107,.08);
     --pulse:#22c55e; --grid:#1e2431;
-    --pad:8px; --gap:8px; --btnh:36px; --radius:12px; --fs:13px;
-    --title:14px; --small:12px;
+    --pad0: 10px; --gap0: 10px; --btnh0: 36px; --radius0: 12px;
+    --fs0: 14px; --title0: 14px; --small0: 12px;
+    --pad: calc(var(--pad0) * var(--ui));
+    --gap: calc(var(--gap0) * var(--ui));
+    --btnh: calc(var(--btnh0) * var(--ui));
+    --radius: calc(var(--radius0) * var(--ui));
+    --fs: calc(var(--fs0) * var(--ui));
+    --title: calc(var(--title0) * var(--ui));
+    --small: calc(var(--small0) * var(--ui));
+    --base-canvas-w: 1040px;
+    --base-canvas-h: 600px;
+    --base-panel-w: 520px;
+    --canvas-w: calc(var(--base-canvas-w) * var(--ui));
+    --panel-w:  calc(var(--base-panel-w)  * var(--ui));
   }
+
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--fg);font:var(--fs)/1.4 system-ui,Segoe UI,Roboto,Arial}
 
   .container{
-    width:100%;min-height:100vh;margin:0 auto;padding:var(--pad);
-    display:grid;gap:var(--gap);
-    grid-template-columns:minmax(0,1fr) clamp(300px,36vw,520px);
-    align-items:start;max-width:1700px;
+    width:100%;
+    min-height:100vh;
+    margin:0 auto;
+    padding:var(--pad);
+    display:grid;
+    gap:var(--gap);
+    grid-template-columns: minmax(0, var(--canvas-w)) var(--panel-w);
+    align-items:start;
+    max-width: calc(var(--canvas-w) + var(--panel-w) + var(--gap));
   }
+
   @media (max-width:1150px){
-    .container{grid-template-columns:1fr; gap:4px;}
+    .container{
+      grid-template-columns:1fr;
+      gap:calc(var(--gap0) * 0.6);
+      max-width:100%;
+    }
   }
 
-  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--bd);border-radius:var(--radius);min-width:0}
-  .canvas-wrap{padding:6px}
-  #canvas{display:block;width:100%;height:auto;aspect-ratio:1040/600;border-radius:10px;touch-action:none;background:var(--canvas)}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--bd);
+    border-radius:var(--radius);
+    min-width:0;
+  }
 
-  .panel{padding:var(--pad);display:flex;flex-direction:column;gap:var(--gap);overflow:auto}
-  .section{background:var(--ctrl);border:1px solid var(--bd);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+  .canvas-wrap{ padding:calc(6px * var(--ui)); }
 
-  .row{display:flex;gap:6px;align-items:center;flex-wrap:nowrap}
+  #canvas{
+    display:block;
+    width:var(--canvas-w);
+    height:calc(var(--base-canvas-h) * var(--ui));
+    max-width:100%;
+    height:auto;
+    aspect-ratio:1040/600;
+    border-radius:calc(10px * var(--ui));
+    touch-action:none;
+    background:var(--canvas);
+  }
+
+  .panel{
+    padding:var(--pad);
+    display:flex;
+    flex-direction:column;
+    gap:var(--gap);
+    overflow:auto;
+  }
+
+  .section{
+    background:var(--ctrl);
+    border:1px solid var(--bd);
+    border-radius:calc(10px * var(--ui));
+    padding:calc(8px * var(--ui));
+    display:flex;
+    flex-direction:column;
+    gap:calc(6px * var(--ui));
+    min-width:0;
+  }
+
+  .row{display:flex;gap:calc(6px * var(--ui));align-items:center;flex-wrap:nowrap}
   .row.equal>*{flex:1 1 0;min-width:0}
 
   input,button,select{
     height:var(--btnh);
-    border-radius:9px;
+    border-radius:calc(9px * var(--ui));
     border:1px solid #1a1f2a;
     background:#121620;
     color:var(--fg);
-    padding:0 10px;
-    font:inherit;outline:none;min-width:0;max-width:100%;
+    padding:0 calc(10px * var(--ui));
+    font:inherit;
+    outline:none;
+    min-width:0;
+    max-width:100%;
   }
+  input.readonly{ pointer-events:none; }
   button{cursor:pointer;transition:transform .04s,background-color .15s,border-color .15s;white-space:nowrap;text-align:center}
   .btn-primary{background:#151b28;border-color:#202638}
   .btn-primary:hover{background:#192132;border-color:#2a3550}
@@ -58,7 +119,8 @@
   select{
     cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;
     background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 10l5 5 5-5' stroke='%23cfd6e2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;background-position:right 8px center;padding-right:26px;
+    background-repeat:no-repeat;background-position:right calc(8px * var(--ui)) center;
+    padding-right:calc(26px * var(--ui));
   }
 
   input[type=number]::-webkit-outer-spin-button,
@@ -66,26 +128,39 @@
   input[type=number]{ -moz-appearance: textfield; appearance:textfield; }
 
   .title{font-size:var(--title);font-weight:600;color:#cfd6e2}
-  .status{font-size:var(--small);color:var(--muted);display:flex;align-items:center;gap:6px}
-  .dot{width:7px;height:7px;border-radius:50%;background:#343a46}
+
+  .dot{width:calc(10px * var(--ui));height:calc(10px * var(--ui));border-radius:50%;background:#343a46;flex:0 0 auto}
   .dot.ok{background:var(--ok)} .dot.err{background:var(--err)}
 
-  .zones{display:grid;grid-template-columns:1fr;gap:6px}
-  .zone-btn{height:34px;font-size:13px}
+  .input-with-icon{position:relative;width:100%;}
+  .status-icon{
+    position:absolute;
+    left:calc(10px * var(--ui));
+    top:50%;
+    transform:translateY(-50%);
+    pointer-events:none;
+  }
+  .status-input{
+    width:100%;
+    padding-left:calc(10px * var(--ui) + 12px * var(--ui) + 8px);
+  }
+
+  .zones{display:grid;grid-template-columns:1fr;gap:calc(6px * var(--ui))}
+  .zone-btn{height:calc(34px * var(--ui));font-size:calc(13px * var(--ui))}
   .zone-btn.active{background:#151e2c;border-color:#2a3550}
 
-  .row.equal .btn-primary, .row.equal .btn-plain { min-width:96px; }
+  .row.equal .btn-primary, .row.equal .btn-plain { min-width:calc(96px * var(--ui)); }
 
   @media (max-width:480px){
-    :root{ --fs:13px; --btnh:34px; }
-    .canvas-wrap{padding:4px;}
-    .panel{padding:6px; gap:6px;}
-    .zones{gap:6px;}
+    :root{ --btnh0: 34px; }
+    .canvas-wrap{padding:calc(4px * var(--ui));}
+    .panel{padding:calc(6px * var(--ui)); gap:calc(6px * var(--ui));}
+    .zones{gap:calc(6px * var(--ui));}
   }
 </style>
 </head>
 <body>
-  <div class="container">
+  <div class="container" id="container">
     <div id="canvasCard" class="card canvas-wrap">
       <canvas id="canvas"></canvas>
     </div>
@@ -96,7 +171,16 @@
         <div class="row">
           <select id="selDevices" aria-label="Device list" style="flex:1"></select>
         </div>
-        <div class="status"><span id="sDot" class="dot"></span><span id="sText">Searching…</span></div>
+      </div>
+
+      <div class="section">
+        <div class="title">Status</div>
+        <div class="row">
+          <div class="input-with-icon">
+            <span id="sDot" class="dot status-icon" aria-hidden="true"></span>
+            <input id="sText" class="status-input readonly" value="Searching…" readonly />
+          </div>
+        </div>
       </div>
 
       <div class="section">
@@ -129,18 +213,23 @@
 
 <script>
 (()=> {
-  const X_MIN=-520, X_MAX=520, Y_MIN=0, Y_MAX=600;
-  const WORLD_W=X_MAX-X_MIN, WORLD_H=Y_MAX-Y_MIN;
-  const MAX_RANGE=600, MAX_POINTS=8, FOV_DEG=120, GRID=100;
+  const BASE_CANVAS_W = 1040;
+  const BASE_PANEL_W  = 520;
+  const BASE_GAP      = 10;
+  const SWITCH_BREAKPOINT = 1150;
 
   const $=(id)=>document.getElementById(id);
+  const container=$('container');
+  const canvasCard=$('canvasCard'), panelCard=$('panelCard');
+  const cvs=$('canvas'), ctx=cvs.getContext('2d',{alpha:true,desynchronized:true});
   const sel=$('selDevices');
   const saveBtn=$('saveBtn'), clearBtn=$('clearBtn');
   const rangeInput=$('rangeInput'), rangeSetBtn=$('rangeSetBtn');
   const sDot=$('sDot'), sText=$('sText');
-  const cvs=$('canvas'), ctx=cvs.getContext('2d',{alpha:true,desynchronized:true});
-  const canvasCard=$('canvasCard'), panelCard=$('panelCard');
   const zoneBtns=[...document.querySelectorAll('.zone-btn')];
+
+  const X_MIN=-520, X_MAX=520, Y_MIN=0, Y_MAX=600;
+  const MAX_RANGE=600, MAX_POINTS=8, FOV_DEG=120, GRID=100;
 
   let cssW=0, cssH=0, dpr=1;
   let currentZone='1';
@@ -152,9 +241,23 @@
   let saving=false;
 
   const BOOT_KEY='sensy_boot_reloaded_once';
-
   let liveTimer=null, livePauseDepth=0, liveInFlight=false;
   const LIVE_INTERVAL_MS=30;
+
+  function updateUIScale() {
+    const isTwoCols = window.matchMedia('(min-width:1151px)').matches;
+    if (!isTwoCols) {
+      document.documentElement.style.setProperty('--ui','1');
+      return;
+    }
+
+    const vw = Math.max(320, window.innerWidth);
+    const gutter = 32;
+    const available = vw - gutter;
+    const baseTotal = BASE_CANVAS_W + BASE_PANEL_W + BASE_GAP;
+    const scale = Math.max(0.6, Math.min(1, available / baseTotal));
+    document.documentElement.style.setProperty('--ui', String(scale));
+  }
 
   function pauseLive(){ livePauseDepth++; if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
   function resumeLive(){
@@ -163,7 +266,10 @@
   }
   const pauseDuring=(fn)=>async(...a)=>{ pauseLive(); try{ return await fn(...a); } finally{ resumeLive(); } };
 
-  function setStatus(kind,msg){ sDot.className='dot'+(kind?(' '+kind):''); sText.textContent=msg; }
+  function setStatus(kind,msg){
+    sDot.className='dot status-icon'+(kind?(' '+kind):'');
+    sText.value = msg;
+  }
 
   async function api(path, body, {retryOnError=true, reloadOnError=true}={}){
     try{
@@ -232,15 +338,12 @@
     finally{ liveInFlight=false; }
   }
 
-  async function loadDeviceEntitiesCore(device_id){
-    const rows = await api('api/device_entities', { device_id });
-    const arr = Array.isArray(rows) ? rows : JSON.parse(rows||'[]');
-    entities = arr.map(e => ({ entity_id:e.entity_id, domain:e.domain, state:e.state, attributes:e.attributes||{} }));
+  function findEntityIdBySuffix(suffix){ return (entities.find(x => x.entity_id.endsWith(suffix))?.entity_id)||null; }
+  function readNumberBySuffix(suffix){
+    const e=entities.find(x=>x.entity_id.endsWith(suffix)); if(!e) return null;
+    const v=(typeof e.state==='number')?e.state:Number(e.state);
+    return Number.isFinite(v)?v:null;
   }
-  const loadDeviceEntities = pauseDuring(loadDeviceEntitiesCore);
-
-  const findEntityIdBySuffix = (suffix) => (entities.find(x => x.entity_id.endsWith(suffix))?.entity_id)||null;
-  function readNumberBySuffix(suffix){ const e=entities.find(x=>x.entity_id.endsWith(suffix)); if(!e) return null; const v=(typeof e.state==='number')?e.state:Number(e.state); return Number.isFinite(v)?v:null; }
   async function setNumberBySuffix(suffix, value){
     const id = findEntityIdBySuffix(suffix);
     if(!id) throw new Error(`Entity not found: *${suffix}`);
@@ -253,12 +356,17 @@
     return { label:`Zone ${z}`, count:`zone_${z}_points_count`, x:(i)=>`zone_${z}_p${i}_x`, y:(i)=>`zone_${z}_p${i}_y` };
   }
 
+  async function loadDeviceEntitiesCore(device_id){
+    const rows = await api('api/device_entities', { device_id });
+    const arr = Array.isArray(rows) ? rows : JSON.parse(rows||'[]');
+    entities = arr.map(e => ({ entity_id:e.entity_id, domain:e.domain, state:e.state, attributes:e.attributes||{} }));
+  }
+
   async function loadDetectionRangeCore(){
     let v = readNumberBySuffix('detection_range_cm'); if(v===null) v=readNumberBySuffix('detection_range');
     detRange = Math.round(Math.max(0,Math.min(MAX_RANGE, v ?? MAX_RANGE)));
     rangeInput.value = String(detRange);
   }
-  const loadDetectionRange = pauseDuring(loadDetectionRangeCore);
 
   async function setDetectionRangeCore(){
     let val = Math.round(Number(rangeInput.value));
@@ -270,7 +378,6 @@
       detRange = val; setStatus('ok', `Range: ${val} cm`); enqueueDraw();
     }catch(e){ setStatus('err', e.message||'Failed to save range'); }
   }
-  const setDetectionRange = pauseDuring(setDetectionRangeCore);
 
   async function loadZoneCore(z){
     const id=zid(z);
@@ -279,11 +386,10 @@
     for(let i=1;i<=n;i++){
       const x = Math.round(readNumberBySuffix(id.x(i)) ?? 0);
       const y = Math.round(readNumberBySuffix(id.y(i)) ?? 0);
-      pts.push({x:clamp(x,X_MIN,X_MAX), y:clamp(y,Y_MIN,Y_MAX)});
+      pts.push({x:clamp(x,X_MIN,X_MAX), y:clamp(y,0,600)});
     }
     zones[z]=pts;
   }
-  const loadZone = pauseDuring(loadZoneCore);
 
   async function loadAllCore(){
     if(!selectedDevice){ setStatus('err','Select a device'); return; }
@@ -293,7 +399,6 @@
     enqueueDraw();
     setStatus('ok','Ready');
   }
-  const loadAll = pauseDuring(loadAllCore);
 
   async function saveCurrentZoneCore(){
     if(saving) return;
@@ -308,7 +413,7 @@
       for(let i=1;i<=MAX_POINTS;i++){
         const p=pts[i-1]||{x:0,y:0};
         tasks.push(setNumberBySuffix(id.x(i), Math.round(clamp(p.x||0,X_MIN,X_MAX))));
-        tasks.push(setNumberBySuffix(id.y(i), Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
+        tasks.push(setNumberBySuffix(id.y(i), Math.round(clamp(p.y||0,0,600))));
       }
       await Promise.allSettled(tasks);
       await setNumberBySuffix(id.count, n);
@@ -318,54 +423,70 @@
     }catch(e){ setStatus('err', e.message||'Save failed'); }
     finally{ saving=false; saveBtn.disabled=false; }
   }
-  const saveCurrentZone = pauseDuring(saveCurrentZoneCore);
 
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const cssVar=(name)=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+  function syncPanelHeight(){
+    const twoCols = matchMedia(`(min-width:${SWITCH_BREAKPOINT+1}px)`).matches;
+    if(twoCols){
+      const h = Math.round(canvasCard.getBoundingClientRect().height);
+      panelCard.style.height = h + 'px';
+    }else{
+      panelCard.style.height = 'auto';
+    }
+  }
+
   function resizeCanvas(){
-    const pad=12;
     const cardRect = canvasCard.getBoundingClientRect();
+    const worldW = (X_MAX - X_MIN);
+    const worldH = 585;
+
+    const pad = 12;
     const maxW = Math.max(320, cardRect.width - pad);
     const maxH = Math.max(260, Math.min(window.innerHeight - 2*pad, (window.innerHeight*0.8)));
-    const scale = Math.min(maxW / WORLD_W, maxH / WORLD_H);
-    cssW = Math.floor(WORLD_W * scale);
-    cssH = Math.floor(WORLD_H * scale);
+
+    const scale = Math.min(maxW / worldW, maxH / worldH, 1);
+    cssW = Math.floor(worldW * scale);
+    cssH = Math.floor(worldH * scale);
+
     if (cvs.style.width !== cssW+'px') cvs.style.width = cssW+'px';
     if (cvs.style.height !== cssH+'px') cvs.style.height = cssH+'px';
+
     dpr = Math.max(1, window.devicePixelRatio || 1);
     const devW = Math.max(2, Math.round(cssW * dpr)), devH = Math.max(2, Math.round(cssH * dpr));
     if (cvs.width !== devW) cvs.width = devW;
     if (cvs.height !== devH) cvs.height = devH;
+
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
 
   function syncLayout(){
+    updateUIScale();
     resizeCanvas();
     enqueueDraw();
-    const twoCols = matchMedia('(min-width:1151px)').matches;
-    panelCard.style.height = twoCols ? (Math.round(cvs.getBoundingClientRect().height + 12) + 'px') : 'auto';
+    syncPanelHeight();
   }
 
-  const toPxX = (x)=> (x - X_MIN) / WORLD_W * cssW;
-  const toPxY = (y)=> (y - Y_MIN) / WORLD_H * cssH;
-  const toCmX = (px)=> X_MIN + (px / cssW) * WORLD_W;
-  const toCmY = (py)=> Y_MIN + (py / cssH) * WORLD_H;
+  const toPxX = (x)=> (x - X_MIN) / (X_MAX-X_MIN) * cssW;
+  const toPxY = (y)=> (y - 0) / (600-0) * cssH;
+  const toCmX = (px)=> X_MIN + (px / cssW) * (X_MAX-X_MIN);
+  const toCmY = (py)=> 0 + (py / cssH) * (600-0);
 
   function drawGrid(){
     ctx.save();
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
     ctx.lineWidth = 1;
     const gridColor = cssVar('--grid') || '#1e2431';
-    const x0 = Math.ceil(X_MIN/GRID)*GRID, y0 = Math.ceil(Y_MIN/GRID)*GRID;
+    const x0 = Math.ceil(X_MIN/GRID)*GRID, y0 = Math.ceil(0/GRID)*GRID;
     for(let x = x0; x <= X_MAX; x += GRID){
       const px = Math.round(toPxX(x)) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(px, Math.round(toPxY(Y_MIN)) + 0.5);
-      ctx.lineTo(px, Math.round(toPxY(Y_MAX)) + 0.5);
+      ctx.moveTo(px, Math.round(toPxY(0)) + 0.5);
+      ctx.lineTo(px, Math.round(toPxY(600)) + 0.5);
       ctx.strokeStyle = gridColor; ctx.globalAlpha = 0.6; ctx.stroke();
     }
-    for(let y = y0; y <= Y_MAX; y += GRID){
+    for(let y = y0; y <= 600; y += GRID){
       const py = Math.round(toPxY(y)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(Math.round(toPxX(X_MIN)) + 0.5, py);
@@ -424,14 +545,13 @@
     for (const n of [1,2,3]){
       const p = livePos[n];
       if(!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x===0&&p.y===0)) continue;
-      const px=toPxX(clamp(p.x,-520,520)), py=toPxY(clamp(p.y,0,600));
+      const px=toPxX(Math.max(-520,Math.min(520,p.x))), py=toPxY(Math.max(0,Math.min(600,p.y)));
       ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
     }
   }
 
   let drawQueued=false;
   function enqueueDraw(){ if(drawQueued) return; drawQueued=true; requestAnimationFrame(()=>{ drawQueued=false; draw(); }); }
-
   function draw(){
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
     drawGrid();
@@ -443,12 +563,7 @@
     drawTargets();
   }
 
-  new ResizeObserver(syncLayout).observe(canvasCard);
-  window.addEventListener('resize', syncLayout);
-
-  let dragIdx=null;
-  let dragWhole=false;
-  let lastPX=0, lastPY=0;
+  let dragIdx=null, dragWhole=false, lastPX=0, lastPY=0;
 
   function localPoint(clientX, clientY){
     const r=cvs.getBoundingClientRect(), sx=(cvs.width/dpr)/r.width, sy=(cvs.height/dpr)/r.height;
@@ -486,16 +601,14 @@
     lastPX=px; lastPY=py; dragWhole=false;
     const idx=nearestIdx(px,py), pts=zones[currentZone];
     if(idx>=0){ dragIdx=idx; enqueueDraw(); return; }
-
     const hit = hitZoneAt(px,py);
     if(hit){
       if(hit!==currentZone){ setCurrentZone(hit); }
       dragWhole=true; dragIdx=null; return;
     }
-
     if(pts.length>=MAX_POINTS) return;
     const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
-    pts.push({x:clamp(x,X_MIN,X_MAX),y:clamp(y,Y_MIN,Y_MAX)}); enqueueDraw();
+    pts.push({x:Math.max(X_MIN,Math.min(X_MAX,x)),y:Math.max(0,Math.min(600,y))}); enqueueDraw();
   }
   function pointerMove(px,py){
     if(dragIdx==null && !dragWhole) return;
@@ -505,8 +618,8 @@
       const pts = zones[currentZone];
       let canMove=true;
       for(const p of pts){
-        const nx=clamp(p.x+dx,X_MIN,X_MAX);
-        const ny=clamp(p.y+dy,Y_MIN,Y_MAX);
+        const nx=Math.max(X_MIN,Math.min(X_MAX,p.x+dx));
+        const ny=Math.max(0,Math.min(600,p.y+dy));
         if(nx!==p.x+dx || ny!==p.y+dy){ canMove=false; break; }
       }
       if(canMove){
@@ -516,9 +629,21 @@
       return;
     }
     const pts=zones[currentZone];
-    pts[dragIdx]={x:Math.round(clamp(toCmX(px),X_MIN,X_MAX)),y:Math.round(clamp(toCmY(py),Y_MIN,Y_MAX))}; enqueueDraw();
+    pts[dragIdx]={x:Math.round(Math.max(X_MIN,Math.min(X_MAX, toCmX(px)))),
+                  y:Math.round(Math.max(0,Math.min(600, toCmY(py))))}; enqueueDraw();
   }
   function pointerUp(){ dragIdx=null; dragWhole=false; }
+
+  const loadDeviceEntities = pauseDuring(async (device_id)=>{
+    const rows = await api('api/device_entities', { device_id });
+    const arr = Array.isArray(rows) ? rows : JSON.parse(rows||'[]');
+    entities = arr.map(e => ({ entity_id:e.entity_id, domain:e.domain, state:e.state, attributes:e.attributes||{} }));
+  });
+  const loadDetectionRange = pauseDuring(loadDetectionRangeCore);
+  const setDetectionRange = pauseDuring(setDetectionRangeCore);
+  const loadZone = pauseDuring(loadZoneCore);
+  const loadAll = pauseDuring(loadAllCore);
+  const saveCurrentZone = pauseDuring(saveCurrentZoneCore);
 
   cvs.addEventListener('mousedown',e=>{ const p=localPoint(e.clientX,e.clientY); pointerDown(p.x,p.y); });
   window.addEventListener('mousemove',e=>{ const p=localPoint(e.clientX,e.clientY); pointerMove(p.x,p.y); });
@@ -565,26 +690,38 @@
         model: sel.options[sel.selectedIndex]?.dataset.model || ''
       };
       setStatus('', 'Loading device…');
-      await loadDeviceEntitiesCore(selectedDevice.device_id);
-      await loadAllCore();
+      await loadDeviceEntities(selectedDevice.device_id);
+      await loadAll();
       setStatus('ok','Ready');
     }catch(e){ setStatus('err','API error: '+(e.message||e)); }
-    finally{ syncLayout(); resumeLive(); }
+    finally{
+      syncLayout();
+      new ResizeObserver(()=>{ syncLayout(); }).observe(container);
+      window.addEventListener('resize', syncLayout);
+      document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') pauseLive(); else resumeLive(); });
+      resumeLive();
+    }
   })();
 
   sel.addEventListener('change', pauseDuring(async ()=>{
     if(!sel.value){ setStatus('err','No device selected'); return; }
-    selectedDevice = { device_id: sel.value, name: sel.options[sel.selectedIndex]?.textContent || sel.value, model: sel.options[sel.selectedIndex]?.dataset.model || '' };
+    selectedDevice = {
+      device_id: sel.value,
+      name: sel.options[sel.selectedIndex]?.textContent || sel.value,
+      model: sel.options[sel.selectedIndex]?.dataset.model || ''
+    };
     try{
       setStatus('', 'Loading device…');
-      await loadDeviceEntitiesCore(selectedDevice.device_id);
-      await loadAllCore();
-    }catch(e){ setStatus('err','Load failed: '+(e.message||e)); }
-    finally{ syncLayout(); }
+      await loadDeviceEntities(selectedDevice.device_id);
+      await loadAll();
+      setStatus('ok','Ready');
+    }catch(e){
+      setStatus('err','Load failed: '+(e.message||e));
+    }finally{
+      syncLayout();
+    }
   }));
 
-  syncLayout();
-  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') pauseLive(); else resumeLive(); });
 })();
 </script>
 </body>
