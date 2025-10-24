@@ -22,9 +22,9 @@
     --fs: calc(var(--fs0) * var(--ui));
     --title: calc(var(--title0) * var(--ui));
     --small: calc(var(--small0) * var(--ui));
-    --base-canvas-w: 1040px;
-    --base-canvas-h: 600px;
-    --base-panel-w: 520px;
+    --base-canvas-w: 1200px;
+    --base-canvas-h: 720px;
+    --base-panel-w: 400px;
     --canvas-w: calc(var(--base-canvas-w) * var(--ui));
     --panel-w:  calc(var(--base-panel-w)  * var(--ui));
   }
@@ -68,7 +68,7 @@
     height:calc(var(--base-canvas-h) * var(--ui));
     max-width:100%;
     height:auto;
-    aspect-ratio:1040/600;
+    aspect-ratio:1200/720;
     border-radius:calc(10px * var(--ui));
     touch-action:none;
     background:var(--canvas);
@@ -86,10 +86,10 @@
     background:var(--ctrl);
     border:1px solid var(--bd);
     border-radius:calc(10px * var(--ui));
-    padding:calc(8px * var(--ui));
+    padding:calc(10px * var(--ui));
     display:flex;
     flex-direction:column;
-    gap:calc(6px * var(--ui));
+    gap:calc(4px * var(--ui));
     min-width:0;
   }
 
@@ -151,7 +151,7 @@
 
   .row.equal .btn-primary, .row.equal .btn-plain { min-width:calc(96px * var(--ui)); }
 
-  @media (max-width:480px){
+  @media (max-width:1150px){
     :root{ --btnh0: 34px; }
     .canvas-wrap{padding:calc(4px * var(--ui));}
     .panel{padding:calc(6px * var(--ui)); gap:calc(6px * var(--ui));}
@@ -180,6 +180,21 @@
             <span id="sDot" class="dot status-icon" aria-hidden="true"></span>
             <input id="sText" class="status-input readonly" value="Searching…" readonly />
           </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="title">View Mode</div>
+        <div class="row equal">
+          <button id="liveModeBtn" class="btn-primary">Live Targets</button>
+          <select id="heatmapHoursSel" aria-label="Heatmap hours">
+            <option value="1">1h</option>
+            <option value="3">3h</option>
+            <option value="6">6h</option>
+            <option value="12">12h</option>
+            <option value="24" selected>24h</option>
+          </select>
+          <button id="heatmapModeBtn" class="btn-plain">Heatmap</button>
         </div>
       </div>
 
@@ -213,8 +228,8 @@
 
 <script>
 (()=> {
-  const BASE_CANVAS_W = 1040;
-  const BASE_PANEL_W  = 520;
+  const BASE_CANVAS_W = 1200;
+  const BASE_PANEL_W  = 400;
   const BASE_GAP      = 10;
   const SWITCH_BREAKPOINT = 1150;
 
@@ -225,13 +240,15 @@
   const sel=$('selDevices');
   const saveBtn=$('saveBtn'), clearBtn=$('clearBtn');
   const rangeInput=$('rangeInput'), rangeSetBtn=$('rangeSetBtn');
+  const liveModeBtn=$('liveModeBtn'), heatmapModeBtn=$('heatmapModeBtn'), heatmapHoursSel=$('heatmapHoursSel');
   const sDot=$('sDot'), sText=$('sText');
   const zoneBtns=[...document.querySelectorAll('.zone-btn')];
 
-  const X_MIN=-520, X_MAX=520, Y_MIN=0, Y_MAX=600;
+  const X_MIN=-525, X_MAX=525, Y_MIN=0, Y_MAX=600;
   const MAX_RANGE=600, MAX_POINTS=8, FOV_DEG=120, GRID=100;
 
   let cssW=0, cssH=0, dpr=1;
+  let PAD=12;
   let currentZone='1';
   const zones={'1':[],'2':[],'3':[],'excl':[]};
   const livePos={1:{x:NaN,y:NaN},2:{x:NaN,y:NaN},3:{x:NaN,y:NaN}};
@@ -240,23 +257,30 @@
   let detRange=MAX_RANGE;
   let saving=false;
 
+  let viewMode='live';
+  let heatmapData=null;
+  const HEATMAP_GRID_SIZE=100;
+
   const BOOT_KEY='sensy_boot_reloaded_once';
   let liveTimer=null, livePauseDepth=0, liveInFlight=false;
   const LIVE_INTERVAL_MS=30;
 
+  const cssVar=(name)=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+
   function updateUIScale() {
     const isTwoCols = window.matchMedia('(min-width:1151px)').matches;
-    if (!isTwoCols) {
-      document.documentElement.style.setProperty('--ui','1');
-      return;
+    if (!isTwoCols) document.documentElement.style.setProperty('--ui','1');
+    else{
+      const vw = Math.max(320, window.innerWidth);
+      const gutter = 32;
+      const available = vw - gutter;
+      const baseTotal = BASE_CANVAS_W + BASE_PANEL_W + BASE_GAP;
+      const scale = Math.max(0.6, Math.min(1, available / baseTotal));
+      document.documentElement.style.setProperty('--ui', String(scale));
     }
-
-    const vw = Math.max(320, window.innerWidth);
-    const gutter = 32;
-    const available = vw - gutter;
-    const baseTotal = BASE_CANVAS_W + BASE_PANEL_W + BASE_GAP;
-    const scale = Math.max(0.6, Math.min(1, available / baseTotal));
-    document.documentElement.style.setProperty('--ui', String(scale));
+    const ui = parseFloat(cssVar('--ui')||'1') || 1;
+    PAD = Math.round(14 * ui);
   }
 
   function pauseLive(){ livePauseDepth++; if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
@@ -364,14 +388,14 @@
 
   async function loadDetectionRangeCore(){
     let v = readNumberBySuffix('detection_range_cm'); if(v===null) v=readNumberBySuffix('detection_range');
-    detRange = Math.round(Math.max(0,Math.min(MAX_RANGE, v ?? MAX_RANGE)));
+    detRange = Math.round(Math.max(Y_MIN,Math.min(MAX_RANGE, v ?? MAX_RANGE)));
     rangeInput.value = String(detRange);
   }
 
   async function setDetectionRangeCore(){
     let val = Math.round(Number(rangeInput.value));
     if(!Number.isFinite(val)) { setStatus('err','Invalid range'); return; }
-    val = Math.max(0,Math.min(MAX_RANGE,val));
+    val = Math.max(Y_MIN,Math.min(MAX_RANGE,val));
     try{
       setStatus('', 'Saving range…');
       try{ await setNumberBySuffix('detection_range_cm', val); } catch{ await setNumberBySuffix('detection_range', val); }
@@ -386,7 +410,7 @@
     for(let i=1;i<=n;i++){
       const x = Math.round(readNumberBySuffix(id.x(i)) ?? 0);
       const y = Math.round(readNumberBySuffix(id.y(i)) ?? 0);
-      pts.push({x:clamp(x,X_MIN,X_MAX), y:clamp(y,0,600)});
+      pts.push({x:clamp(x,X_MIN,X_MAX), y:clamp(y,Y_MIN,Y_MAX)});
     }
     zones[z]=pts;
   }
@@ -413,7 +437,7 @@
       for(let i=1;i<=MAX_POINTS;i++){
         const p=pts[i-1]||{x:0,y:0};
         tasks.push(setNumberBySuffix(id.x(i), Math.round(clamp(p.x||0,X_MIN,X_MAX))));
-        tasks.push(setNumberBySuffix(id.y(i), Math.round(clamp(p.y||0,0,600))));
+        tasks.push(setNumberBySuffix(id.y(i), Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
       }
       await Promise.allSettled(tasks);
       await setNumberBySuffix(id.count, n);
@@ -424,38 +448,50 @@
     finally{ saving=false; saveBtn.disabled=false; }
   }
 
-  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
-  const cssVar=(name)=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-  function syncPanelHeight(){
-    const twoCols = matchMedia(`(min-width:${SWITCH_BREAKPOINT+1}px)`).matches;
-    if(twoCols){
-      const h = Math.round(canvasCard.getBoundingClientRect().height);
-      panelCard.style.height = h + 'px';
-    }else{
-      panelCard.style.height = 'auto';
-    }
+  function parsePx(v){ return Number((v||'0').toString().replace('px',''))||0; }
+  function getCardPaddings(el){
+    const cs = getComputedStyle(el);
+    return {
+      pt: parsePx(cs.paddingTop),
+      pb: parsePx(cs.paddingBottom),
+      pl: parsePx(cs.paddingLeft),
+      pr: parsePx(cs.paddingRight),
+    };
   }
 
   function resizeCanvas(){
-    const cardRect = canvasCard.getBoundingClientRect();
+    const twoCols = matchMedia(`(min-width:${SWITCH_BREAKPOINT+1}px)`).matches;
     const worldW = (X_MAX - X_MIN);
-    const worldH = 585;
+    const worldH = (Y_MAX - Y_MIN);
+    const cardRect = canvasCard.getBoundingClientRect();
+    const pad = getCardPaddings(canvasCard);
 
-    const pad = 12;
-    const maxW = Math.max(320, cardRect.width - pad);
-    const maxH = Math.max(260, Math.min(window.innerHeight - 2*pad, (window.innerHeight*0.8)));
+    if (twoCols){
+      const panelH = Math.max(200, Math.round(panelCard.getBoundingClientRect().height));
+      const targetCssH = Math.max(2, panelH - (pad.pt + pad.pb));
+      let targetCssW = Math.round(targetCssH * (worldW / worldH));
+      const maxCssW = Math.max(200, Math.round(cardRect.width - (pad.pl + pad.pr)));
+      if (targetCssW > maxCssW){
+        targetCssW = maxCssW;
+        const cappedCssH = Math.round(targetCssW * (worldH / worldW));
+        cssW = targetCssW; cssH = cappedCssH;
+      }else{
+        cssW = targetCssW; cssH = targetCssH;
+      }
+    }else{
+      const maxCssW = Math.max(200, Math.round(cardRect.width - (pad.pl + pad.pr)));
+      cssW = maxCssW;
+      cssH = Math.round(cssW * ( (Y_MAX - Y_MIN) / (X_MAX - X_MIN) ));
+    }
 
-    const scale = Math.min(maxW / worldW, maxH / worldH, 1);
-    cssW = Math.floor(worldW * scale);
-    cssH = Math.floor(worldH * scale);
-
-    if (cvs.style.width !== cssW+'px') cvs.style.width = cssW+'px';
-    if (cvs.style.height !== cssH+'px') cvs.style.height = cssH+'px';
+    const styleW = cssW+'px', styleH = cssH+'px';
+    if (cvs.style.width !== styleW)  cvs.style.width  = styleW;
+    if (cvs.style.height !== styleH) cvs.style.height = styleH;
 
     dpr = Math.max(1, window.devicePixelRatio || 1);
-    const devW = Math.max(2, Math.round(cssW * dpr)), devH = Math.max(2, Math.round(cssH * dpr));
-    if (cvs.width !== devW) cvs.width = devW;
+    const devW = Math.max(2, Math.round(cssW * dpr));
+    const devH = Math.max(2, Math.round(cssH * dpr));
+    if (cvs.width !== devW)  cvs.width  = devW;
     if (cvs.height !== devH) cvs.height = devH;
 
     ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -465,28 +501,29 @@
     updateUIScale();
     resizeCanvas();
     enqueueDraw();
-    syncPanelHeight();
   }
 
-  const toPxX = (x)=> (x - X_MIN) / (X_MAX-X_MIN) * cssW;
-  const toPxY = (y)=> (y - 0) / (600-0) * cssH;
-  const toCmX = (px)=> X_MIN + (px / cssW) * (X_MAX-X_MIN);
-  const toCmY = (py)=> 0 + (py / cssH) * (600-0);
+  function innerW(){ return Math.max(2, cssW - 2*PAD); }
+  function innerH(){ return Math.max(2, cssH - 2*PAD); }
+  const toPxX = (x)=> PAD + (x - X_MIN) / (X_MAX-X_MIN) * innerW();
+  const toPxY = (y)=> PAD + (y - Y_MIN) / (Y_MAX-Y_MIN) * innerH();
+  const toCmX = (px)=> X_MIN + ((px - PAD) / innerW()) * (X_MAX-X_MIN);
+  const toCmY = (py)=> Y_MIN + ((py - PAD) / innerH()) * (Y_MAX-Y_MIN);
 
   function drawGrid(){
     ctx.save();
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
     ctx.lineWidth = 1;
     const gridColor = cssVar('--grid') || '#1e2431';
-    const x0 = Math.ceil(X_MIN/GRID)*GRID, y0 = Math.ceil(0/GRID)*GRID;
+    const x0 = Math.ceil(X_MIN/GRID)*GRID, y0 = Math.ceil(Y_MIN/GRID)*GRID;
     for(let x = x0; x <= X_MAX; x += GRID){
       const px = Math.round(toPxX(x)) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(px, Math.round(toPxY(0)) + 0.5);
-      ctx.lineTo(px, Math.round(toPxY(600)) + 0.5);
+      ctx.moveTo(px, Math.round(toPxY(Y_MIN)) + 0.5);
+      ctx.lineTo(px, Math.round(toPxY(Y_MAX)) + 0.5);
       ctx.strokeStyle = gridColor; ctx.globalAlpha = 0.6; ctx.stroke();
     }
-    for(let y = y0; y <= 600; y += GRID){
+    for(let y = y0; y <= Y_MAX; y += GRID){
       const py = Math.round(toPxY(y)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(Math.round(toPxX(X_MIN)) + 0.5, py);
@@ -497,11 +534,19 @@
   }
 
   function makeFovPoints(range){
-    const pts=[], half=FOV_DEG/2, rad=d=>d*Math.PI/180;
-    for(let a=half;a>=-half;a-=1.2) pts.push({x:range*Math.sin(rad(a)),y:range*Math.cos(rad(a))});
-    pts.push({x:0,y:0},{x:0,y:0});
+    const pts=[];
+    const half = FOV_DEG/2;
+    const rad = Math.PI/180;
+    pts.push({x:0,y:0});
+    for(let a=-half; a<=half; a+=1){
+      const x = range * Math.sin(a*rad);
+      const y = range * Math.cos(a*rad);
+      pts.push({x,y});
+    }
+    pts.push({x:0,y:0});
     return pts;
   }
+
   function drawFov(range, lighter=false){
     const r = Math.max(0, Math.min(MAX_RANGE, range|0));
     const pts=makeFovPoints(r);
@@ -509,11 +554,12 @@
     ctx.moveTo(toPxX(pts[0].x),toPxY(pts[0].y));
     for(let i=1;i<pts.length;i++) ctx.lineTo(toPxX(pts[i].x),toPxY(pts[i].y));
     ctx.closePath();
-    ctx.globalAlpha = lighter ? 0.08 : 0.15;
+    ctx.globalAlpha = lighter ? 0.10 : 0.18;
     ctx.fillStyle=cssVar('--fov');
     ctx.fill();
     ctx.globalAlpha=1;
   }
+
   function drawPolygon(pts,style){
     if(pts.length<2) return;
     ctx.beginPath(); ctx.moveTo(toPxX(pts[0].x),toPxY(pts[0].y));
@@ -540,14 +586,89 @@
     }
   }
   function drawTargets(){
+    if(viewMode !== 'live') return;
     const color = cssVar('--pulse') || '#22c55e';
     const r = targetRadius();
     for (const n of [1,2,3]){
       const p = livePos[n];
       if(!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x===0&&p.y===0)) continue;
-      const px=toPxX(Math.max(-520,Math.min(520,p.x))), py=toPxY(Math.max(0,Math.min(600,p.y)));
+      const px=toPxX(clamp(p.x,X_MIN,X_MAX)), py=toPxY(clamp(p.y,Y_MIN,Y_MAX));
       ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
     }
+  }
+
+  async function fetchHistoricalData(entityIds, hours=24){
+    if(!selectedDevice) return [];
+    setStatus('', `Fetching ${hours}h data…`);
+    try{
+      const body = entityIds && entityIds.length ? { entity_ids: entityIds, hours } : { device_id: selectedDevice.device_id, hours };
+      const res = await api('api/historical_targets', body);
+      const positions = res.positions || [];
+      setStatus('ok', `Loaded ${positions.length} positions`);
+      return positions;
+    }catch(e){
+      setStatus('err', 'Failed to fetch history: '+e.message);
+      return [];
+    }
+  }
+
+  function buildHeatmapGrid(positions){
+    const worldW = X_MAX - X_MIN;
+    const worldH = Y_MAX - Y_MIN;
+    const cellW = worldW / HEATMAP_GRID_SIZE;
+    const cellH = worldH / HEATMAP_GRID_SIZE;
+
+    const grid = [];
+    for(let i=0;i<HEATMAP_GRID_SIZE;i++){
+      grid[i]=new Array(HEATMAP_GRID_SIZE).fill(0);
+    }
+
+    for(const pos of positions){
+      const x = pos.x, y = pos.y;
+      if(!Number.isFinite(x) || !Number.isFinite(y) || x > X_MAX || x < X_MIN || y > Y_MAX || y < Y_MIN) continue;
+      const xi = Math.floor((x - X_MIN) / cellW);
+      const yi = Math.floor((y - Y_MIN) / cellH);
+      if(xi >=0 && xi < HEATMAP_GRID_SIZE && yi >=0 && yi < HEATMAP_GRID_SIZE){
+        grid[yi][xi] += 1;
+      }
+    }
+
+    let maxDensity = 0;
+    for(let i=0;i<HEATMAP_GRID_SIZE;i++){
+      for(let j=0;j<HEATMAP_GRID_SIZE;j++){
+        if(grid[i][j] > maxDensity) maxDensity = grid[i][j];
+      }
+    }
+
+    return {grid, maxDensity};
+  }
+
+  function drawHeatmap(){
+    if(viewMode !== 'heatmap' || !heatmapData) return;
+
+    const {grid, maxDensity} = heatmapData;
+    if(maxDensity === 0) return;
+
+    const cellW = innerW() / HEATMAP_GRID_SIZE;
+    const cellH = innerH() / HEATMAP_GRID_SIZE;
+
+    ctx.save();
+    for(let i=0;i<HEATMAP_GRID_SIZE;i++){
+      for(let j=0;j<HEATMAP_GRID_SIZE;j++){
+        const density = grid[i][j];
+        if(density > 0){
+          const intensity = density / maxDensity;
+          const hue = 120 * (1 - intensity);
+          const alpha = 0.7 * intensity;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+          const px = PAD + j * cellW;
+          const py = PAD + i * cellH;
+          ctx.fillRect(px, py, cellW, cellH);
+        }
+      }
+    }
+    ctx.restore();
   }
 
   let drawQueued=false;
@@ -555,8 +676,9 @@
   function draw(){
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
     drawGrid();
-    drawFov(MAX_RANGE,false);
-    if(detRange<MAX_RANGE) drawFov(detRange,true);
+    drawFov(MAX_RANGE, false);
+    if(detRange>0 && detRange<MAX_RANGE){ drawFov(detRange, true); }
+    drawHeatmap();
     for(const key of ['1','2','3','excl']){ const style=zoneStyle(key,key===currentZone); if(key!==currentZone) drawPolygon(zones[key],style); }
     drawPolygon(zones[currentZone],zoneStyle(currentZone,true));
     drawHandles(zones[currentZone]);
@@ -608,7 +730,7 @@
     }
     if(pts.length>=MAX_POINTS) return;
     const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
-    pts.push({x:Math.max(X_MIN,Math.min(X_MAX,x)),y:Math.max(0,Math.min(600,y))}); enqueueDraw();
+    pts.push({x:clamp(x,X_MIN,X_MAX),y:clamp(y,Y_MIN,Y_MAX)}); enqueueDraw();
   }
   function pointerMove(px,py){
     if(dragIdx==null && !dragWhole) return;
@@ -618,8 +740,8 @@
       const pts = zones[currentZone];
       let canMove=true;
       for(const p of pts){
-        const nx=Math.max(X_MIN,Math.min(X_MAX,p.x+dx));
-        const ny=Math.max(0,Math.min(600,p.y+dy));
+        const nx=clamp(p.x+dx,X_MIN,X_MAX);
+        const ny=clamp(p.y+dy,Y_MIN,Y_MAX);
         if(nx!==p.x+dx || ny!==p.y+dy){ canMove=false; break; }
       }
       if(canMove){
@@ -629,8 +751,8 @@
       return;
     }
     const pts=zones[currentZone];
-    pts[dragIdx]={x:Math.round(Math.max(X_MIN,Math.min(X_MAX, toCmX(px)))),
-                  y:Math.round(Math.max(0,Math.min(600, toCmY(py))))}; enqueueDraw();
+    pts[dragIdx]={x:Math.round(clamp(toCmX(px),X_MIN,X_MAX)),
+                  y:Math.round(clamp(toCmY(py),Y_MIN,Y_MAX))}; enqueueDraw();
   }
   function pointerUp(){ dragIdx=null; dragWhole=false; }
 
@@ -665,6 +787,38 @@
   rangeSetBtn.addEventListener('click', setDetectionRange);
   rangeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') setDetectionRange(); });
 
+  liveModeBtn.addEventListener('click', function(){
+    viewMode = 'live';
+    liveModeBtn.classList.remove('btn-plain');
+    liveModeBtn.classList.add('btn-primary');
+    heatmapModeBtn.classList.remove('btn-primary');
+    heatmapModeBtn.classList.add('btn-plain');
+    enqueueDraw();
+    if(selectedDevice) resumeLive();
+  });
+
+  heatmapModeBtn.addEventListener('click', async function(){
+    if(!selectedDevice) return;
+    viewMode = 'heatmap';
+    liveModeBtn.classList.remove('btn-primary');
+    liveModeBtn.classList.add('btn-plain');
+    heatmapModeBtn.classList.remove('btn-plain');
+    heatmapModeBtn.classList.add('btn-primary');
+    pauseLive();
+    const targetEntityIds = entities.filter(e =>
+      e.entity_id.endsWith('target_1_x') ||
+      e.entity_id.endsWith('target_1_y') ||
+      e.entity_id.endsWith('target_2_x') ||
+      e.entity_id.endsWith('target_2_y') ||
+      e.entity_id.endsWith('target_3_x') ||
+      e.entity_id.endsWith('target_3_y')
+    ).map(e => e.entity_id);
+    const hours = Number(heatmapHoursSel.value);
+    const positions = await fetchHistoricalData(targetEntityIds, hours);
+    heatmapData = buildHeatmapGrid(positions);
+    enqueueDraw();
+  });
+
   (async ()=>{
     try{
       pauseLive();
@@ -695,10 +849,15 @@
       setStatus('ok','Ready');
     }catch(e){ setStatus('err','API error: '+(e.message||e)); }
     finally{
-      syncLayout();
-      new ResizeObserver(()=>{ syncLayout(); }).observe(container);
+      const ro1 = new ResizeObserver(()=>{ syncLayout(); });
+      ro1.observe(container);
+      const ro2 = new ResizeObserver(()=>{ syncLayout(); });
+      ro2.observe(panelCard);
+
       window.addEventListener('resize', syncLayout);
       document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') pauseLive(); else resumeLive(); });
+
+      syncLayout();
       resumeLive();
     }
   })();
@@ -710,6 +869,7 @@
       name: sel.options[sel.selectedIndex]?.textContent || sel.value,
       model: sel.options[sel.selectedIndex]?.dataset.model || ''
     };
+    heatmapData = null;
     try{
       setStatus('', 'Loading device…');
       await loadDeviceEntities(selectedDevice.device_id);
