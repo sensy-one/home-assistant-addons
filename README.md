@@ -4,8 +4,9 @@ An official add-on for configuring **polygon detection zones** on **Sensy-One** 
 
 ![Sensy-One Banner](https://github.com/sensy-one/home-assistant-addons/blob/main/zone-editor/HA.png)
 
-The **Sensy-One Zone Editor** allows you to visually define and fine-tune detection zones for your Sensy-One sensors — no YAML editing or manual coordinates required.  
-Create up to **three detection zones** and **one exclusion zone**, all applied instantly to your device.
+The **Sensy-One Zone Editor** provides a visual interface for creating and adjusting detection zones for Sensy-One sensors.  
+It supports **2D and 3D zone editing**, **live 3D target visualization**, and a **3D KDE/heatmap view** for spatial detection analysis.  
+Up to **three detection zones** and **one exclusion zone** can be configured, with changes applied directly to the device.
 
 ## ⚙️ Installation
 
