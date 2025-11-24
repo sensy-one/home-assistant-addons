@@ -22,7 +22,7 @@ For advanced users or custom setups, the Zone Editor can also be run as a standa
 
 ### docker-compose setup
 
-Create a file named `[docker-compose.yaml](https://github.com/sensy-one/home-assistant-addons/docker-compose.yaml)`:
+Create a file named [docker-compose.yaml](https://github.com/sensy-one/home-assistant-addons/blob/main/docker-compose.yaml):
 
 ```yaml
 services:
@@ -36,7 +36,7 @@ services:
       - 8099:8099
 ```
 
-Create a `[.env](https://github.com/sensy-one/home-assistant-addons/.env)` file in the same directory:
+Create a [.env](https://github.com/sensy-one/home-assistant-addons/blob/main/.env): file in the same directory:
 
 ```env
 HOME_ASSISTANT_IP=your_home_assistant_ip_here
