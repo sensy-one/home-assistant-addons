@@ -16,3 +16,6 @@
 
 ## 2025-11-19 — v1.2.2
 - Added 3D viewer for zones, live 3D target, and KDE map
+
+## 2025-11-24 — v1.2.3
+- Fixed UI reload loop when device_entities returns 400 error

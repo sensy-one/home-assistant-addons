@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Sensy-One Zone Editor</title>
-<style>
+<style> 
   :root{
     --ui: 1;
     --bg:#06070a; --panel:#0a0c11; --panel-2:#0b0d12; --ctrl:#10131a; --bd:#171b22;
@@ -397,8 +397,8 @@
       localStorage.removeItem(BOOT_KEY);
       const ct=r.headers.get('content-type')||'';
       return ct.includes('application/json')?JSON.parse(text):text;
-    }catch(err){
-      if(reloadOnError&&!localStorage.getItem(BOOT_KEY)){
+      }catch(err){
+      if(reloadOnError && err instanceof TypeError && !localStorage.getItem(BOOT_KEY)){
         localStorage.setItem(BOOT_KEY,'1');
         location.reload();
         await new Promise(()=>{});
@@ -528,10 +528,10 @@
       x:(i)=>`zone_${z}_p${i}_x`,
       y:(i)=>`zone_${z}_p${i}_y`
     };
+    
   }
-
-  async function loadDeviceEntitiesCore(device_id){
-    const rows=await api('api/device_entities',{device_id});
+    async function loadDeviceEntitiesCore(device_id){
+    const rows=await api('api/device_entities',{device_id},{reloadOnError:false});
     const arr=Array.isArray(rows)?rows:JSON.parse(rows||'[]');
     entities=arr.map(e=>({entity_id:e.entity_id,domain:e.domain,state:e.state,attributes:e.attributes||{}}));
   }
@@ -1814,7 +1814,6 @@ const HUMAN_TRIANGLES = [
 
     ctx.restore();
   }
-
 
   function drawScene3D(){
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
