@@ -30,11 +30,10 @@ services:
     image: ghcr.io/sensy-one/zone-editor:latest
     container_name: sensy-zone-editor
     environment:
-      - HA_URL=http://${HOME_ASSISTANT_IP}:8123
-      - HA_TOKEN=${LONG_LIVED_ACCESS_TOKEN}
+      - HA_URL=http://${HOME_ASSISTANT_IP:-homeassistant.local}:8123
+      - HA_TOKEN=${LONG_LIVED_ACCESS_TOKEN?error}
     ports:
-      - "8099:8099"
-    restart: unless-stopped
+      - 8099:8099
 ```
 
 Create a `.env` file in the same directory:
