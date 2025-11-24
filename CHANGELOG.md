@@ -19,3 +19,6 @@
 
 ## 2025-11-24 — v1.2.3
 - Fixed UI reload loop when device_entities returns 400 error
+
+## 2025-11-24 — v1.2.4
+- Improved zone editing by allowing users to insert new points directly on existing edges and remove points using right-click.

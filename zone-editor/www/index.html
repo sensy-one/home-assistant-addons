@@ -1879,7 +1879,7 @@ const HUMAN_TRIANGLES = [
     return {x:(clientX-r.left)*sx,y:(clientY-r.top)*sy};
   }
 
-  function nearestIdx(px,py){
+    function nearestIdx(px,py){
     if(!currentZone) return -1;
     const pts=zones[currentZone];
     if(!pts) return -1;
@@ -1891,6 +1891,41 @@ const HUMAN_TRIANGLES = [
     }
     return best;
   }
+
+  function distToSegment(px,py,ax,ay,bx,by){
+    const vx=bx-ax, vy=by-ay;
+    const wx=px-ax, wy=py-ay;
+    const c1=vx*wx+vy*wy;
+    if(c1<=0) return Math.hypot(px-ax,py-ay);
+    const c2=vx*vx+vy*vy;
+    if(c2<=c1) return Math.hypot(px-bx,py-by);
+    const t=c1/c2;
+    const projx=ax+t*vx, projy=ay+t*vy;
+    return Math.hypot(px-projx,py-projy);
+  }
+
+  function nearestEdge(px,py){
+    if(!currentZone) return {idx:-1,dist:Infinity};
+    const pts=zones[currentZone];
+    if(!pts || pts.length<2) return {idx:-1,dist:Infinity};
+
+    let bestIdx=-1;
+    let dmin=10;
+
+    for(let i=0;i<pts.length;i++){
+      const j=(i+1)%pts.length;
+
+      const ax=toPxX(pts[i].x), ay=toPxY(pts[i].y);
+      const bx=toPxX(pts[j].x), by=toPxY(pts[j].y);
+      const d=distToSegment(px,py,ax,ay,bx,by);
+      if(d<dmin){
+        dmin=d;
+        bestIdx=i;
+      }
+    }
+    return {idx:bestIdx,dist:dmin};
+  }
+
   function pointInPoly(pts,px,py){
     if(!pts||pts.length<3) return false;
     const x=toCmX(px), y=toCmY(py);
@@ -1916,8 +1951,8 @@ const HUMAN_TRIANGLES = [
     setStatus('ok',`${z==='excl'?'Exclusion':'Zone '+z} selected`);
   }
 
-  function pointerDown(px,py){
-    if(!selectedDevice) return;
+  function pointerDown(px,py,button){
+  if(button == null) button = 0;
 
     if(viewMode==='heatmap3d'){
       orbitDragging = true;
@@ -1939,8 +1974,19 @@ const HUMAN_TRIANGLES = [
       return;
     }
 
-    const pts=zones[currentZone];
+        const pts=zones[currentZone];
     if(!pts) return;
+
+    if(button === 2){
+      const idx = nearestIdx(px,py);
+      if(idx >= 0){
+        pts.splice(idx, 1);
+        dragIdx = null;
+        dragWhole = false;
+        enqueueDraw();
+      }
+      return;
+    }
 
     const idx=nearestIdx(px,py);
     if(idx>=0){
@@ -1948,6 +1994,23 @@ const HUMAN_TRIANGLES = [
       enqueueDraw();
       return;
     }
+
+    if(pts.length>=2 && pts.length<MAX_POINTS){
+      const edge=nearestEdge(px,py);
+      if(edge.idx>=0){
+        const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
+        const p={
+          x:clamp(x,X_MIN,X_MAX),
+          y:clamp(y,Y_MIN,Y_MAX)
+        };
+        const insertAt=edge.idx+1;
+        pts.splice(insertAt,0,p);
+        dragIdx=insertAt;
+        enqueueDraw();
+        return;
+      }
+    }
+
     const hit=hitZoneAt(px,py);
     if(hit){
       if(hit!==currentZone){
@@ -1957,10 +2020,12 @@ const HUMAN_TRIANGLES = [
       dragIdx=null;
       return;
     }
+
     if(pts.length>=MAX_POINTS) return;
     const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
     pts.push({x:clamp(x,X_MIN,X_MAX),y:clamp(y,Y_MIN,Y_MAX)});
     enqueueDraw();
+
   }
 
   function pointerMove(px,py){
@@ -2023,8 +2088,8 @@ const HUMAN_TRIANGLES = [
   const saveCurrentZone=pauseDuring(saveCurrentZoneCore);
 
   cvs.addEventListener('mousedown',e=>{
-    const p=localPoint(e.clientX,e.clientY);
-    pointerDown(p.x,p.y);
+  const p=localPoint(e.clientX,e.clientY);
+  pointerDown(p.x,p.y, e.button);
   });
   window.addEventListener('mousemove',e=>{
     const p=localPoint(e.clientX,e.clientY);
@@ -2060,7 +2125,7 @@ const HUMAN_TRIANGLES = [
     const t=e.touches[0];
     if(!t) return;
     const p=localPoint(t.clientX,t.clientY);
-    pointerDown(p.x,p.y);
+    pointerDown(p.x,p.y, 0);
     e.preventDefault();
   },{passive:false});
 
