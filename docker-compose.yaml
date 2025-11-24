@@ -1,0 +1,9 @@
+services:
+  zone-editor:
+    image: ghcr.io/sensy-one/zone-editor:latest
+    container_name: sensy-zone-editor
+    environment:
+      - HA_URL=http://${HOME_ASSISTANT_IP:-homeassistant.local}:8123
+      - HA_TOKEN=${LONG_LIVED_ACCESS_TOKEN?error}
+    ports:
+      - 8099:8099
