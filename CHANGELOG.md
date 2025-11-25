@@ -28,3 +28,6 @@
 - Added unified 2D / 3D toggle for both Live and Heatmap modes.
 - Preserved selected view dimension when switching between Live and Heatmap.
 - Enabled live target visualization in Heatmap 2D mode.
+
+## 2025-11-25 — v1.2.6
+- Radar background is now immune to Windows transparency and high contrast settings.
