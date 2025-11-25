@@ -29,7 +29,11 @@ def execute_template():
             return jsonify({'error': 'template required'}), 400
         r = ha_post('/template', {'template': template})
         if r.status_code == 200:
-            return Response(r.text, status=200, mimetype=r.headers.get('Content-Type', 'text/plain; charset=utf-8'))
+            return Response(
+                r.text,
+                status=200,
+                mimetype=r.headers.get('Content-Type', 'text/plain; charset=utf-8')
+            )
         return jsonify({'error': 'template error', 'details': r.text}), r.status_code
     except Exception as e:
         logging.exception('execute_template failed')
@@ -49,7 +53,7 @@ def device_entities():
     'entity_id': s.entity_id,
     'domain': (s.entity_id.split('.'))[0],
     'state': s.state,
-    'attributes': s.attributes
+    'attributes': (s.attributes | tojson)
   }} ] %}}
 {{% endfor %}}
 {{{{ out.list | tojson }}}}
@@ -95,7 +99,7 @@ def historical_targets():
       'entity_id': s.entity_id,
       'domain': (s.entity_id.split('.'))[0],
       'state': s.state,
-      'attributes': s.attributes
+      'attributes': (s.attributes | tojson)
     }} ] %}}
   {{% endif %}}
 {{% endfor %}}
@@ -106,7 +110,16 @@ def historical_targets():
                 print("template error details:", r.text, flush=True)
                 return jsonify({'error': 'template error', 'details': r.text}), r.status_code
             arr = r.json() or []
-            entity_ids = [e['entity_id'] for e in arr if e['entity_id'].endswith('target_1_x') or e['entity_id'].endswith('target_1_y') or e['entity_id'].endswith('target_2_x') or e['entity_id'].endswith('target_2_y') or e['entity_id'].endswith('target_3_x') or e['entity_id'].endswith('target_3_y')]
+            entity_ids = [
+                e['entity_id']
+                for e in arr
+                if e['entity_id'].endswith('target_1_x')
+                or e['entity_id'].endswith('target_1_y')
+                or e['entity_id'].endswith('target_2_x')
+                or e['entity_id'].endswith('target_2_y')
+                or e['entity_id'].endswith('target_3_x')
+                or e['entity_id'].endswith('target_3_y')
+            ]
 
         print("entity_ids to use:", entity_ids, flush=True)
 
@@ -118,12 +131,11 @@ def historical_targets():
         now = datetime.datetime.utcnow()
         start_time = (now - datetime.timedelta(hours=hours))
         start_ts = int(start_time.timestamp())
-
         start_str = start_time.strftime('%Y-%m-%dT%H:%M:%SZ')
         print("start_str:", start_str, flush=True)
 
-        entity_list = ','.join(entity_ids)
-        history_url = f'/history/period/{start_str}?filter_entity_id={entity_list}'
+        entity_list_str = ','.join(entity_ids)
+        history_url = f'/history/period/{start_str}?filter_entity_id={entity_list_str}'
         hr = requests.get(HOME_ASSISTANT_API + history_url, headers=headers)
         if hr.status_code != 200:
             return jsonify({'error': 'history fetch failed', 'status': hr.status_code}), hr.status_code
@@ -151,7 +163,7 @@ def historical_targets():
                 target_num = parts[-2]
                 axis = parts[-1]
 
-                if axis not in ['x', 'y'] or target_num not in ['1','2','3']:
+                if axis not in ['x', 'y'] or target_num not in ['1', '2', '3']:
                     continue
 
                 ts = last_changed[:19]

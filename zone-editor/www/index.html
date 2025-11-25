@@ -274,6 +274,7 @@
   };
   let selectedDevice=null, entities=[], detRange=MAX_RANGE, saving=false;
   let viewMode='live';
+  let viewDim='2d';
   let heatmapPositions=[];
   let heatmapFieldColor=null, heatmapFieldHeight=null, heatmapFieldW=0, heatmapFieldH=0;
 
@@ -787,16 +788,18 @@
   }
 
   function drawTargets(){
-    if(viewMode!=='live') return;
-    const color=cssVar('--pulse')||'#22c55e';
-    const r=targetRadius();
-    for(const n of [1,2,3]){
-      const p=livePos[n];
-      if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||(p.x===0&&p.y===0)) continue;
-      const px=toPxX(clamp(p.x,X_MIN,X_MAX)), py=toPxY(clamp(p.y,Y_MIN,Y_MAX));
+    if(viewDim !== '2d') return;
+
+    const color = cssVar('--pulse') || '#22c55e';
+    const r = targetRadius();
+    for (const n of [1, 2, 3]) {
+      const p = livePos[n];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x === 0 && p.y === 0)) continue;
+      const px = toPxX(clamp(p.x, X_MIN, X_MAX));
+      const py = toPxY(clamp(p.y, Y_MIN, Y_MAX));
       ctx.beginPath();
-      ctx.arc(px,py,r,0,Math.PI*2);
-      ctx.fillStyle=color;
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
       ctx.fill();
     }
   }
@@ -1247,7 +1250,7 @@
   }
 
   function drawHeatmap3D(){
-    if(viewMode!=='heatmap3d') return;
+    if(viewMode!=='heatmap' || viewDim!=='3d') return;
     const cached = ensureHeatmapField();
     if(!cached) return;
     const {color,height,w,h} = cached;
@@ -1739,7 +1742,7 @@ const HUMAN_TRIANGLES = [
 ];
 
   function drawTargets3D() {
-    if (viewMode !== 'heatmap3d') return;
+    if (viewDim !== '3d') return;
     if (!HUMAN_TRIANGLES.length) return;
 
     const faces = [];
@@ -1816,16 +1819,18 @@ const HUMAN_TRIANGLES = [
   }
 
   function drawScene3D(){
-    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
-    updateCamera3D();
-    drawGrid3D();
-    drawFov3D(MAX_RANGE,false);
-    if(detRange>0 && detRange<MAX_RANGE){
-      drawFov3D(detRange,true);
-    }
+  ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
+  updateCamera3D();
+  drawGrid3D();
+  drawFov3D(MAX_RANGE,false);
+  if(detRange>0 && detRange<MAX_RANGE){
+    drawFov3D(detRange,true);
+  }
+  if(viewMode === 'heatmap'){
     drawHeatmap3D();
-    drawZones3D();
-    drawTargets3D();
+  }
+  drawZones3D();
+  drawTargets3D();
   }
 
   let drawQueued=false;
@@ -1838,13 +1843,15 @@ const HUMAN_TRIANGLES = [
   function draw(){
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
 
-    if(viewMode === 'heatmap3d'){
+    if(viewDim === '3d'){
       drawScene3D();
     } else {
       drawGrid();
       drawFov(MAX_RANGE,false);
       if(detRange>0&&detRange<MAX_RANGE) drawFov(detRange,true);
-      drawHeatmap2D();
+      if(viewMode === 'heatmap'){
+        drawHeatmap2D();
+      }
       for(const key of ['1','2','3','excl']){
         const active = currentZone && key===currentZone;
         const style=zoneStyle(key,active);
@@ -1857,19 +1864,18 @@ const HUMAN_TRIANGLES = [
       drawTargets();
     }
 
-    const showHeat = (viewMode==='heatmap' || viewMode==='heatmap3d');
-    legend.style.display = showHeat ? 'flex' : 'none';
+    const showLegend = (viewMode === 'heatmap');
+    legend.style.display = showLegend ? 'flex' : 'none';
     if(viewToggle){
-      viewToggle.style.display = showHeat ? 'flex' : 'none';
+      viewToggle.style.display = 'flex';
     }
 
     viewToggleBtns.forEach(btn=>{
       const v = btn.dataset.view;
-      const active = (v==='2d' && viewMode==='heatmap') ||
-                     (v==='3d' && viewMode==='heatmap3d');
+      const active = (v === viewDim);
       btn.classList.toggle('active',active);
     });
-  }
+  }   
 
   let dragIdx=null, dragWhole=false, lastPX=0, lastPY=0;
 
@@ -1954,7 +1960,7 @@ const HUMAN_TRIANGLES = [
   function pointerDown(px,py,button){
   if(button == null) button = 0;
 
-    if(viewMode==='heatmap3d'){
+    if(viewDim==='3d'){
       orbitDragging = true;
       orbitLastX = px;
       orbitLastY = py;
@@ -2029,7 +2035,7 @@ const HUMAN_TRIANGLES = [
   }
 
   function pointerMove(px,py){
-    if(viewMode==='heatmap3d'){
+    if(viewDim==='3d'){
       if(!orbitDragging) return;
       const dx = px - orbitLastX;
       const dy = py - orbitLastY;
@@ -2072,7 +2078,7 @@ const HUMAN_TRIANGLES = [
   }
 
   function pointerUp(){
-    if(viewMode==='heatmap3d'){
+    if(viewDim==='3d'){
       orbitDragging=false;
       return;
     }
@@ -2099,7 +2105,7 @@ const HUMAN_TRIANGLES = [
   cvs.addEventListener('contextmenu',e=>e.preventDefault());
 
   cvs.addEventListener('wheel',e=>{
-    if(viewMode!=='heatmap3d') return;
+    if(viewDim!=='3d') return;
     e.preventDefault();
     const delta = e.deltaY || e.wheelDelta || 0;
     if(!delta) return;
@@ -2115,7 +2121,7 @@ const HUMAN_TRIANGLES = [
   }
 
   cvs.addEventListener('touchstart',e=>{
-    if(viewMode==='heatmap3d' && e.touches.length===2){
+    if(viewDim==='3d' && e.touches.length===2){
       pinchZooming = true;
       orbitDragging = false;
       pinchLastDist = touchDistance(e.touches[0], e.touches[1]);
@@ -2130,7 +2136,7 @@ const HUMAN_TRIANGLES = [
   },{passive:false});
 
   cvs.addEventListener('touchmove',e=>{
-    if(viewMode==='heatmap3d' && pinchZooming && e.touches.length>=2){
+    if(viewDim==='3d' && pinchZooming && e.touches.length>=2){
       const d = touchDistance(e.touches[0], e.touches[1]);
       if(d>0 && pinchLastDist>0){
         const factor = pinchLastDist / d;
@@ -2193,7 +2199,7 @@ const HUMAN_TRIANGLES = [
     heatmapModeBtn.classList.remove('btn-primary','btn-plain');
 
     liveModeBtn.classList.add(mode==='live'?'btn-primary':'btn-plain');
-    heatmapModeBtn.classList.add((mode==='heatmap'||mode==='heatmap3d')?'btn-primary':'btn-plain');
+    heatmapModeBtn.classList.add(mode==='heatmap'?'btn-primary':'btn-plain');
   }
 
   liveModeBtn.addEventListener('click',function(){
@@ -2219,29 +2225,44 @@ const HUMAN_TRIANGLES = [
   async function switchToHeatmap2D(){
     if(!selectedDevice) return;
     setViewModeButtons('heatmap');
+    viewDim = '2d';
     await ensureHeatmapData();
-    enqueueDraw();
+  enqueueDraw();
   }
 
   async function switchToHeatmap3D(){
     if(!selectedDevice) return;
-    setViewModeButtons('heatmap3d');
+    setViewModeButtons('heatmap');
+    viewDim = '3d';
     resetOrbitForHeatmap();
     await ensureHeatmapData();
     enqueueDraw();
   }
 
-  heatmapModeBtn.addEventListener('click',switchToHeatmap2D);
+  heatmapModeBtn.addEventListener('click', async () => {
+    if (!selectedDevice) return;
+
+    if (viewDim === '3d') {
+      await switchToHeatmap3D();
+    } else {
+      await switchToHeatmap2D();
+    }
+  });
 
   viewToggleBtns.forEach(btn=>{
-    btn.addEventListener('click',async ()=>{
+    btn.addEventListener('click', async ()=>{
       if(!selectedDevice) return;
-      const v=btn.dataset.view;
-      if(v==='2d'){
-        if(viewMode!=='heatmap') await switchToHeatmap2D();
-      }else{
-        if(viewMode!=='heatmap3d') await switchToHeatmap3D();
-        else await switchToHeatmap3D();
+      const v = btn.dataset.view;
+      if(v === '2d'){
+        viewDim = '2d';
+        enqueueDraw();
+      } else {
+        viewDim = '3d';
+        resetOrbitForHeatmap();
+        if(viewMode === 'heatmap'){
+          await ensureHeatmapData();
+        }
+        enqueueDraw();
       }
     });
   });
@@ -2272,8 +2293,10 @@ const HUMAN_TRIANGLES = [
     heatmapPositions=[];
     heatmapFieldColor=null;
     heatmapFieldHeight=null;
-    if(viewMode==='heatmap') await switchToHeatmap2D();
-    else if(viewMode==='heatmap3d') await switchToHeatmap3D();
+    if(viewMode === 'heatmap'){
+      if(viewDim === '3d') await switchToHeatmap3D();
+      else await switchToHeatmap2D();
+    }
   });
 
   (async()=>{
@@ -2338,6 +2361,7 @@ const HUMAN_TRIANGLES = [
     heatmapFieldHeight=null;
     setViewModeButtons('live');
     TUNE.sigmaScale = 1.0;
+    viewDim = '2d';
     legendSigmaBtns.forEach(b=>b.classList.remove('active'));
     currentZone = null;
     zoneBtns.forEach(b=>b.classList.remove('active'));

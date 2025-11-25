@@ -22,3 +22,9 @@
 
 ## 2025-11-24 — v1.2.4
 - Improved zone editing by allowing users to insert new points directly on existing edges and remove points using right-click.
+
+## 2025-11-25 — v1.2.5
+- Fixed Home Assistant template crash caused by non-serializable datetime attributes by enforcing JSON conversion.
+- Added unified 2D / 3D toggle for both Live and Heatmap modes.
+- Preserved selected view dimension when switching between Live and Heatmap.
+- Enabled live target visualization in Heatmap 2D mode.
