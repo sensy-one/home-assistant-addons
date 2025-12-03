@@ -110,16 +110,16 @@
   }
 
   .view-toggle-btn{
-    min-width:calc(34px * var(--ui));
-    height:calc(34px * var(--ui));
-    padding:0 8px;
+    min-width:calc(24px * var(--ui));
+    height:calc(24px * var(--ui));
+    padding:0 4px;
     font-size:12px;
     border-radius:6px;
   }
 
   .legend-btn{
-    min-width:calc(34px * var(--ui));
-    height:calc(34px * var(--ui));
+    min-width:calc(24px * var(--ui));
+    height:calc(24px * var(--ui));
     padding:0;
   }
 
@@ -279,8 +279,8 @@
   let heatmapFieldColor=null, heatmapFieldHeight=null, heatmapFieldW=0, heatmapFieldH=0;
 
   const DEFAULT_AZIMUTH = 0;
-  const DEFAULT_ELEVATION = Math.PI * 0.5;
-  const DEFAULT_DISTANCE_FACTOR = 0.86;
+  const DEFAULT_ELEVATION = 40 * Math.PI / 180;
+  const DEFAULT_DISTANCE_FACTOR = 0.94;
 
   const ORBIT = {
     azimuth: DEFAULT_AZIMUTH,
