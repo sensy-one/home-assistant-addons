@@ -65,6 +65,8 @@ http://<IP_OF_THE_MACHINE_RUNNING_DOCKER>:8099
 
 * Detection zones are created using the Draw Polygons tool in the bottom-right toolbar. With a sensor selected, polygon-based zones can be drawn directly on the floorplan to define detection areas.
 
+* Controls, Hold Shift and drag with the mouse to pan. Drag with the mouse (without Shift) to orbit.
+
 ## 💬 Let's Connect
 
 Your feedback helps us improve. Whether you’ve found a bug, need help, or want to suggest a feature — we’re listening.
