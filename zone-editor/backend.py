@@ -1,11 +1,12 @@
 from flask import Flask, jsonify, request, Response, send_from_directory
-import requests, os, sys, logging
+import requests, os, sys, logging, json, re
 
 app = Flask(__name__)
 
 SUPERVISOR_TOKEN = os.getenv('SUPERVISOR_TOKEN')
 HA_URL = os.getenv('HA_URL')
 HA_TOKEN = os.getenv('HA_TOKEN')
+FLOORPLAN_STORE = os.getenv('FLOORPLAN_STORE', '/data/zone_editor_floorplans.json')
 
 if SUPERVISOR_TOKEN:
     HOME_ASSISTANT_API = 'http://supervisor/core/api'
@@ -20,13 +21,45 @@ else:
 def ha_post(path, json=None, timeout=20):
     return requests.post(f'{HOME_ASSISTANT_API}{path}', headers=headers, json=json, timeout=timeout)
 
-@app.route('/api/template', methods=['POST'])
+def floorplan_entity_id(floor_id: str) -> str:
+    safe = re.sub(r'[^a-z0-9_]+', '_', floor_id.lower())
+    safe = re.sub(r'_+', '_', safe).strip('_')
+    if not safe:
+        safe = 'floor'
+    return f'zone_editor_floorplan.{safe}'
+
+def load_store():
+    try:
+        with open(FLOORPLAN_STORE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        logging.warning('Failed to read floorplan store: %s', e)
+        return {}
+
+def save_store(data):
+    try:
+        os.makedirs(os.path.dirname(FLOORPLAN_STORE), exist_ok=True)
+        with open(FLOORPLAN_STORE, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        return True
+    except Exception as e:
+        logging.exception('Failed to write floorplan store')
+        return False
+
+@app.route('/api/template', methods=['GET', 'POST'])
 def execute_template():
     try:
-        data = request.get_json(force=True) or {}
-        template = data.get('template', '')
+        if request.method == 'POST':
+            data = request.get_json(force=True) or {}
+            template = data.get('template', '')
+        else:
+            template = request.args.get('template', '')
+
         if not template:
             return jsonify({'error': 'template required'}), 400
+
         r = ha_post('/template', {'template': template})
         if r.status_code == 200:
             return Response(
@@ -66,6 +99,99 @@ def device_entities():
         logging.exception('device_entities failed')
         return jsonify({'error': 'backend exception', 'details': str(e)}), 500
 
+@app.route('/api/floor_entities', methods=['GET', 'POST'])
+def floor_entities_route():
+    try:
+        if request.method == 'POST':
+            data = request.get_json(force=True) or {}
+            floor = (data.get('floor')
+                     or data.get('floor_id')
+                     or data.get('floor_name')
+                     or '').strip()
+        else:
+            floor = (request.args.get('floor')
+                     or request.args.get('floor_id')
+                     or request.args.get('floor_name')
+                     or '').strip()
+        if not floor:
+            return jsonify({'error': 'floor (name_or_id) required'}), 400
+        tpl = f"{{{{ floor_entities('{floor}') | tojson }}}}"
+        r = ha_post('/template', {'template': tpl})
+        if r.status_code == 200:
+            return Response(r.text, status=200, mimetype='application/json')
+        return jsonify({'error': 'template error', 'details': r.text}), r.status_code
+    except Exception as e:
+        logging.exception('floor_entities_route failed')
+        return jsonify({'error': 'backend exception', 'details': str(e)}), 500
+
+@app.route('/api/floors', methods=['GET', 'POST'])
+def floors_route():
+    try:
+        tpl = "{{ floors() | tojson }}"
+        r = ha_post('/template', {'template': tpl})
+        if r.status_code == 200:
+            return Response(r.text, status=200, mimetype='application/json')
+        return jsonify({'error': 'template error', 'details': r.text}), r.status_code
+    except Exception as e:
+        logging.exception('floors_route failed')
+        return jsonify({'error': 'backend exception', 'details': str(e)}), 500
+
+@app.route('/api/floorplan', methods=['GET', 'POST'])
+def floorplan_route():
+    try:
+        if request.method == 'GET':
+            floor_id = (request.args.get('floor_id') or request.args.get('floor') or '').strip()
+        else:
+            data = request.get_json(force=True) or {}
+            floor_id = (data.get('floor_id') or data.get('floor') or '').strip()
+        if not floor_id:
+            return jsonify({'error': 'floor_id required'}), 400
+
+        entity_id = floorplan_entity_id(floor_id)
+
+        if request.method == 'GET':
+            store = load_store()
+            stored = store.get(floor_id) or {}
+            polylines = stored.get('polylines', [])
+            sensors = stored.get('sensors')
+            if not sensors:
+                legacy = stored.get('sensor')
+                if legacy:
+                    sensors = [legacy]
+                else:
+                    sensors = []
+            first_sensor = sensors[0] if sensors else None
+            return jsonify({'polylines': polylines, 'sensors': sensors, 'sensor': first_sensor})
+
+        polylines = data.get('polylines', [])
+        sensors = data.get('sensors')
+        if sensors is None:
+            legacy = data.get('sensor')
+            sensors = [legacy] if legacy else []
+        payload = {
+            'state': 'saved',
+            'attributes': {
+                'floor_id': floor_id,
+                'polylines': polylines,
+                'sensors': sensors,
+                'sensor': sensors[0] if sensors else None
+            }
+        }
+        store = load_store()
+        store[floor_id] = {'polylines': polylines, 'sensors': sensors}
+        save_ok = save_store(store)
+
+        r = ha_post(f'/states/{entity_id}', payload)
+        if r.status_code not in (200, 201):
+            logging.warning('HA state update failed: %s', r.text)
+
+        if not save_ok:
+            return jsonify({'error': 'failed to persist to disk'}), 500
+        return jsonify({'ok': True})
+    except Exception as e:
+        logging.exception('floorplan_route failed')
+        return jsonify({'error': 'backend exception', 'details': str(e)}), 500
+
 @app.route('/api/services/<domain>/<service>', methods=['POST'])
 def call_service(domain, service):
     try:
@@ -83,10 +209,9 @@ def historical_targets():
     try:
         import datetime
         data = request.get_json(force=True) or {}
-        print("Received data:", data, flush=True)
         entity_ids = data.get('entity_ids', [])
         device_id = data.get('device_id', '').strip()
-        print("device_id:", repr(device_id), flush=True)
+
         if not entity_ids and not device_id:
             return jsonify({'error': 'device_id or entity_ids required'}), 400
 
@@ -107,7 +232,6 @@ def historical_targets():
             """.strip()
             r = ha_post('/template', {'template': tpl})
             if r.status_code != 200:
-                print("template error details:", r.text, flush=True)
                 return jsonify({'error': 'template error', 'details': r.text}), r.status_code
             arr = r.json() or []
             entity_ids = [
@@ -121,18 +245,13 @@ def historical_targets():
                 or e['entity_id'].endswith('target_3_y')
             ]
 
-        print("entity_ids to use:", entity_ids, flush=True)
-
         if not entity_ids:
             return jsonify({'positions': []}), 200
 
         hours = data.get('hours', 24)
-        print("hours:", hours, flush=True)
         now = datetime.datetime.utcnow()
         start_time = (now - datetime.timedelta(hours=hours))
-        start_ts = int(start_time.timestamp())
         start_str = start_time.strftime('%Y-%m-%dT%H:%M:%SZ')
-        print("start_str:", start_str, flush=True)
 
         entity_list_str = ','.join(entity_ids)
         history_url = f'/history/period/{start_str}?filter_entity_id={entity_list_str}'
@@ -142,13 +261,11 @@ def historical_targets():
 
         history_data = hr.json()
 
-        print("History data recv, num groups:", len(history_data) if history_data else 0, flush=True)
         positions = {}
         for entity_list in history_data:
             if not entity_list:
                 continue
             entity_id = entity_list[0]['entity_id']
-            print(f"Processing {entity_id} with {len(entity_list)} entries", flush=True)
             for entry in entity_list:
                 last_changed = entry['last_changed']
                 state = entry['state']
@@ -185,8 +302,6 @@ def historical_targets():
                         'y': coords['y'],
                         'timestamp': ts
                     })
-
-        print(f"Total positions: {len(pos_list)}", flush=True)
 
         return jsonify({'positions': pos_list}), 200
 

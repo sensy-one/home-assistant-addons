@@ -35,3 +35,6 @@
 ## 2025-12-03 — v1.2.7
 - Mobile controls have been refined: all view and zoom buttons now fit cleanly within the layout and keep equal spacing.
 - 3D view now starts from an improved default angle, giving a clearer forward-facing perspective right away.
+
+## 2025-12-14 — v1.3.7
+- New 2D/3D floorplan editor for sensor placement and zone configuration

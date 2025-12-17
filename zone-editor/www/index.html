@@ -1,18 +1,18 @@
 <!doctype html>
 <html lang="en">
-<head> 
+<head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Sensy-One Zone Editor</title>
-<style> 
+<style>
   :root{
     --ui: 1;
     --bg:#06070a; --panel:#0a0c11; --panel-2:#0b0d12; --ctrl:#10131a; --bd:#171b22;
     --fg:#e6eaf1; --muted:#9aa3ad; --ok:#22c55e; --err:#ef4444;
-    --canvas:#0a0d12; --fov:#5f7cff;
-    --z-norm:#69b1ff; --z-norm-fill:rgba(105,177,255,.16); --z-norm-dim:#3c6fa9; --z-norm-dim-fill:rgba(105,177,255,.08);
-    --z-excl:#ff6b6b; --z-excl-fill:rgba(255,107,107,.16); --z-excl-dim:#a84848; --z-excl-dim-fill:rgba(255,107,107,.08);
-    --pulse:#22c55e; --grid:#1e2431;
+    --canvas:#0a0d12; --fov:#7082a8;
+    --z-norm:#64c09e; --z-norm-fill:rgba(126,240,197,.19); --z-norm-dim:#459f7e; --z-norm-dim-fill:rgba(86,199,157,.11);
+    --z-excl:#cc6f6f; --z-excl-fill:rgba(255,139,139,.18); --z-excl-dim:#b35d5d; --z-excl-dim-fill:rgba(255,139,139,.10);
+    --pulse:rgba(185,194,207,0.9); --grid:#1e2431;
     --pad0: 10px; --gap0: 10px; --btnh0: 36px; --radius0: 12px;
     --fs0: 14px; --title0: 14px; --small0: 12px;
     --pad: calc(var(--pad0) * var(--ui));
@@ -40,14 +40,17 @@
     border-radius:calc(10px * var(--ui));touch-action:none;background:var(--canvas);}
 
   .legend,
-  .view-toggle{
+  .view-toggle,
+  .floorplan-toggle,
+  .floorplan-tools,
+  .floorplan-history{
     display:flex;
     align-items:center;
-    gap:8px;
+    gap:calc(8px * var(--ui));
     background:#0b0f17cc;
     border:1px solid #1a2030;
-    border-radius:10px;
-    padding:6px 10px;
+    border-radius:calc(10px * var(--ui));
+    padding:calc(6px * var(--ui));
     min-height:var(--btnh);
   }
   .view-toggle{
@@ -56,15 +59,33 @@
     top:12px;
     z-index:5;
   }
+  .floorplan-toggle{
+    position:absolute;
+    left:12px;
+    top:12px;
+    z-index:5;
+  }
+  .floorplan-tools{
+    position:absolute;
+    right:12px;
+    bottom:12px;
+    z-index:5;
+  }
+  .floorplan-history{
+    position:absolute;
+    left:12px;
+    bottom:12px;
+    z-index:5;
+  }
 
   .view-toggle-btn{
     border:none;
     background:transparent;
     color:#b9c2cf;
     font-size:12px;
-    min-width:var(--btnh);
+    min-width:calc(32px * var(--ui));
     height:var(--btnh);
-    padding:0 6px;
+    padding:0 calc(10px * var(--ui));
     line-height:1;
     display:flex;
     align-items:center;
@@ -75,6 +96,34 @@
   .legend-btn{
     padding:0;
     min-width:var(--btnh);
+  }
+  .view-toggle-btn .btn-icon{
+    width:calc(26px * var(--ui));
+    height:calc(26px * var(--ui));
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .btn-icon svg{
+    width:100%;
+    height:100%;
+    stroke:currentColor;
+    fill:none;
+    stroke-width:1.2;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+  .view-toggle-btn.icon-only{
+    padding:0;
+    min-width:var(--btnh);
+    width:var(--btnh);
+    justify-content:center;
+  }
+  .floorplan-tools .view-toggle-btn{
+    min-width:0;
+  }
+  .floorplan-history .view-toggle-btn{
+    min-width:0;
   }
   .view-toggle-btn.active{
     background:#151b28;
@@ -95,10 +144,24 @@
   @media (max-width:700px){
   .legend,
   .view-toggle{
-    padding:2px 6px;
-    gap:4px;
+    padding:calc(4px * var(--ui));
+    gap:calc(6px * var(--ui));
     min-height:calc(34px * var(--ui));
     right:8px;
+  }
+  .floorplan-toggle{
+    padding:calc(4px * var(--ui));
+    gap:calc(6px * var(--ui));
+    min-height:calc(34px * var(--ui));
+    left:8px;
+    top:8px;
+  }
+  .floorplan-tools{
+    padding:calc(4px * var(--ui));
+    gap:calc(6px * var(--ui));
+    min-height:calc(34px * var(--ui));
+    left:8px;
+    bottom:8px;
   }
 
   .view-toggle{
@@ -127,6 +190,7 @@
     width:80px;
     height:6px;
   }
+
 }
 
   .panel{padding:var(--pad);display:flex;flex-direction:column;gap:var(--gap);overflow:auto;}
@@ -164,11 +228,63 @@
     <div id="canvasCard" class="card canvas-wrap">
       <canvas id="canvas"></canvas>
 
+      <div class="floorplan-toggle" id="floorplanToggle">
+        <button class="view-toggle-btn" id="floorplanBtn" aria-pressed="false">Floorplan</button>
+      </div>
+
       <div class="view-toggle" id="viewToggle">
         <button class="view-toggle-btn active" data-view="2d">2D</button>
         <button class="view-toggle-btn" data-view="3d">3D</button>
       </div>
 
+      <div class="floorplan-tools" id="floorplanTools" style="display:none" aria-label="Floorplan tools">
+        <button class="view-toggle-btn floorplan-tool-btn icon-only" data-tool="draw" aria-label="Walls tool" aria-pressed="false">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="7" cy="17" r="2"></circle>
+              <circle cx="17" cy="7" r="2"></circle>
+              <path d="M8.5 15.5 15.5 8.5"></path>
+            </svg>
+          </span>
+        </button>
+        <button class="view-toggle-btn floorplan-tool-btn icon-only" data-tool="sensor" aria-label="Sensors tool" aria-pressed="false">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"></circle>
+              <circle cx="12" cy="12" r="4"></circle>
+              <circle cx="12" cy="12" r="7"></circle>
+            </svg>
+          </span>
+        </button>
+        <button class="view-toggle-btn floorplan-tool-btn icon-only" data-tool="zone" aria-label="Zone polygon tool" aria-pressed="false">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="6" cy="6" r="2"></circle>
+              <circle cx="18" cy="6" r="2"></circle>
+              <circle cx="18" cy="18" r="2"></circle>
+              <circle cx="6" cy="18" r="2"></circle>
+              <path d="M8 6H16 M18 8V16 M16 18H8 M6 16V8"></path>
+            </svg>
+          </span>
+        </button>
+      </div>
+
+      <div class="floorplan-history" id="floorplanHistory" style="display:none" aria-label="Floorplan history controls">
+        <button class="view-toggle-btn icon-only" id="floorplanUndoBtn" aria-label="Undo">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M16 6 L8 12 L16 18 Z"></path>
+            </svg>
+          </span>
+        </button>
+        <button class="view-toggle-btn icon-only" id="floorplanRedoBtn" aria-label="Redo">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M8 6 L16 12 L8 18 Z"></path>
+            </svg>
+          </span>
+        </button>
+      </div>
       <div class="legend" id="legend">
         <button class="view-toggle-btn legend-btn" data-op="minus">−</button>
         <div class="legend-bar"></div>
@@ -177,21 +293,25 @@
     </div>
     <div id="panelCard" class="card panel">
       <div class="section">
-        <div class="title">Device</div>
+        <div class="title" id="deviceTitle">Device</div>
         <div class="row"><select id="selDevices" aria-label="Device list" style="flex:1"></select></div>
       </div>
       <div class="section">
         <div class="title">Status</div>
         <div class="row">
           <div class="input-with-icon">
-            <span id="sDot" class="dot status-icon" aria-hidden="true"></span>
-            <input id="sText" class="status-input readonly" value="Searching…" readonly />
+            <span id="sDot" class="dot status-icon ok" aria-hidden="true"></span>
+            <input id="sText" class="status-input readonly" value="Ready" readonly />
           </div>
         </div>
       </div>
+      <div class="section" id="floorplanDeviceSection" style="display:none">
+        <div class="title">Device</div>
+        <div class="row"><select id="floorplanDeviceSel" aria-label="Device list (floorplan)" style="flex:1"></select></div>
+      </div>
       <div class="section">
-        <div class="title">View Mode</div>
-        <div class="row equal">
+        <div class="title" id="modeTitle">View Mode</div>
+        <div class="row equal" id="viewControls">
           <button id="liveModeBtn" class="btn-primary">Live Targets</button>
           <select id="heatmapHoursSel" aria-label="Heatmap hours">
             <option value="1">1h</option><option value="3">3h</option><option value="6">6h</option>
@@ -199,8 +319,12 @@
           </select>
           <button id="heatmapModeBtn" class="btn-plain">Heatmap</button>
         </div>
+        <div class="row equal" id="floorplanRangeControls" style="display:none">
+          <input id="floorplanRangeInput" type="number" min="0" max="600" step="1" placeholder="0 – 600 cm" inputmode="numeric" />
+          <button id="floorplanRangeSetBtn" class="btn-primary">Save</button>
+        </div>
       </div>
-      <div class="section">
+      <div class="section" id="rangeSection">
         <div class="title">Detection range</div>
         <div class="row equal">
           <input id="rangeInput" type="number" min="0" max="600" step="1" placeholder="0 – 600 cm" inputmode="numeric" />
@@ -228,30 +352,68 @@
 
 <script>
 (() => {
+
   const BASE_CANVAS_W=1200, BASE_PANEL_W=400, BASE_GAP=10, SWITCH_BREAKPOINT=1150;
   const $=id=>document.getElementById(id);
   const container=$('container'), canvasCard=$('canvasCard'), panelCard=$('panelCard');
   const cvs=$('canvas'), ctx=cvs.getContext('2d',{alpha:true,desynchronized:true});
   const sel=$('selDevices');
+  const floorplanDeviceSection=$('floorplanDeviceSection');
+  const floorplanDeviceSel=$('floorplanDeviceSel');
+  const rangeSection=$('rangeSection');
+  const deviceTitle=$('deviceTitle');
   const saveBtn=$('saveBtn'), clearBtn=$('clearBtn');
   const rangeInput=$('rangeInput'), rangeSetBtn=$('rangeSetBtn');
   const liveModeBtn=$('liveModeBtn'),
         heatmapModeBtn=$('heatmapModeBtn'),
         heatmapHoursSel=$('heatmapHoursSel');
+  const floorplanRangeControls=$('floorplanRangeControls');
+  const floorplanRangeInput=$('floorplanRangeInput');
+  const floorplanRangeSetBtn=$('floorplanRangeSetBtn');
+  const viewControls=$('viewControls');
+  const modeTitle=$('modeTitle');
   const sDot=$('sDot'), sText=$('sText');
   const zoneBtns=[...document.querySelectorAll('.zone-btn')];
   const legend=$('legend');
   const viewToggle=$('viewToggle');
+  const floorplanBtn=$('floorplanBtn');
+  const floorplanTools=$('floorplanTools');
+  const floorplanHistoryBar=$('floorplanHistory');
+  const floorplanUndoBtn=$('floorplanUndoBtn');
+  const floorplanRedoBtn=$('floorplanRedoBtn');
   const viewToggleBtns=[...document.querySelectorAll('.view-toggle-btn[data-view]')];
   const legendSigmaBtns=[...document.querySelectorAll('.legend-btn')];
+  const floorplanToolBtns=[...document.querySelectorAll('.floorplan-tool-btn')];
 
   const X_MIN=-525, X_MAX=525, Y_MIN=0, Y_MAX=600;
   const WORLD_W = X_MAX - X_MIN;
   const WORLD_H = Y_MAX - Y_MIN;
   const MAX_RANGE=600, MAX_POINTS=8, FOV_DEG=120, GRID=100;
+  const BASE_BOUNDS = {xMin:X_MIN, xMax:X_MAX, yMin:Y_MIN, yMax:Y_MAX};
+  const FLOORPLAN_SCALE = 6;
+  const FLOORPLAN_INITIAL_SCALE = 2;
+  const FLOORPLAN_W = WORLD_W * FLOORPLAN_SCALE;
+  const FLOORPLAN_H = WORLD_H * FLOORPLAN_SCALE;
+  const FLOORPLAN_INITIAL_W = WORLD_W * FLOORPLAN_INITIAL_SCALE;
+  const FLOORPLAN_INITIAL_H = WORLD_H * FLOORPLAN_INITIAL_SCALE;
+  const FLOORPLAN_CENTER_X = (X_MIN + X_MAX) * 0.5;
+  const FLOORPLAN_CENTER_Y = (Y_MIN + Y_MAX) * 0.5;
+  const FLOORPLAN_BOUNDS = {
+    xMin: FLOORPLAN_CENTER_X - FLOORPLAN_W * 0.5,
+    xMax: FLOORPLAN_CENTER_X + FLOORPLAN_W * 0.5,
+    yMin: FLOORPLAN_CENTER_Y - FLOORPLAN_H * 0.5,
+    yMax: FLOORPLAN_CENTER_Y + FLOORPLAN_H * 0.5
+  };
+  const FLOORPLAN_INITIAL_BOUNDS = {
+    xMin: FLOORPLAN_CENTER_X - FLOORPLAN_INITIAL_W * 0.5,
+    xMax: FLOORPLAN_CENTER_X + FLOORPLAN_INITIAL_W * 0.5,
+    yMin: FLOORPLAN_CENTER_Y - FLOORPLAN_INITIAL_H * 0.5,
+    yMax: FLOORPLAN_CENTER_Y + FLOORPLAN_INITIAL_H * 0.5
+  };
   const FOV_RAD = FOV_DEG * Math.PI / 180;
 
   const WALL_HEIGHT_CM = 180;
+  const FLOORPLAN_WALL_HEIGHT_CM = WALL_HEIGHT_CM * 1.3;
   const HEATMAP_MAX_HEIGHT_CM = 150;
   const HEATMAP3D_MAX_RES = 1024;
 
@@ -266,43 +428,127 @@
 
   let cssW=0, cssH=0, dpr=1, PAD=12;
   let currentZone=null;
-  const zones={'1':[],'2':[],'3':[],'excl':[]};
-  const livePos = {
+  let zones={'1':[],'2':[],'3':[],'excl':[]};
+  const makeLivePos=()=>({
     1: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 },
     2: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 },
     3: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 }
-  };
-  let selectedDevice=null, entities=[], detRange=MAX_RANGE, saving=false;
+  });
+  const livePosMap={};
+  let livePos=makeLivePos();
+  function livePosFor(deviceId){
+    const key=deviceId||'__default';
+    if(!livePosMap[key]) livePosMap[key]=makeLivePos();
+    return livePosMap[key];
+  }
+  let selectedDevice=null;
+  let selectedFloorId=null;
+  let devicesList=[];
+  let floorsList=[];
+  let entities=[], detRange=MAX_RANGE, saving=false;
   let viewMode='live';
   let viewDim='2d';
+  let floorplanEnabled=false;
+  let floorplanPolylines=[];
+  let floorplanActiveLine=null;
+  let floorplanPreview=null;
+  let floorplanPreviewDir={x:0,y:-1};
+  let floorplanPreviewSuppressed=false;
+  let floorplanLengthInput='';
+  let floorplanEditEnabled=true;
+  let floorplanTool='view';
+  let floorplanSensors=[];
+  let floorplanSensorHover=null;
+  let floorplanSensorDragging=null;
+  let floorplanSensorRotating=null;
+  let floorplanDragMode=null;
+  let floorplanHistory=[];
+  let floorplanFuture=[];
+  let floorplanZoneDragIdx=null, floorplanZoneDragWhole=false, floorplanZoneLastPX=0, floorplanZoneLastPY=0;
+  let pan2DDragging=false, panLastX=0, panLastY=0;
   let heatmapPositions=[];
   let heatmapFieldColor=null, heatmapFieldHeight=null, heatmapFieldW=0, heatmapFieldH=0;
+  let HUMAN_TRIANGLES=[];
 
   const DEFAULT_AZIMUTH = 0;
   const DEFAULT_ELEVATION = 40 * Math.PI / 180;
-  const DEFAULT_DISTANCE_FACTOR = 0.94;
+  const CAMERA_FOV_DEG = 60;
+  const MIN_ZOOM_2D = 0.4;
+  const MAX_ZOOM_2D = 4;
 
   const ORBIT = {
     azimuth: DEFAULT_AZIMUTH,
     elevation: DEFAULT_ELEVATION,
     distance: 1400
   };
+  const ORBIT_TARGET = {x:0,z:0}; 
   const ORBIT_LIMITS = {
     minElev: -Math.PI * 0.05,
     maxElev: Math.PI * 0.9,
-    minDist: 250,
-    maxDist: 750
+    minDist: 400,
+    maxDist: 1125 * 1.5
+  };
+  const ORBIT_ROTATE_SPEED = 0.01;
+  const ORBIT_PAN_SPEED = 0.0025;
+
+  const DEFAULT_ORBIT_DIST = ((BASE_BOUNDS.yMax - BASE_BOUNDS.yMin) * 0.5) *
+    (Math.cos(DEFAULT_ELEVATION) + (Math.sin(DEFAULT_ELEVATION) / Math.tan((CAMERA_FOV_DEG * Math.PI / 180) * 0.5)));
+
+  const defaultOrbitDistance=(bounds=activeBounds())=>{
+    const halfDepth = (bounds.yMax - bounds.yMin) * 0.5;
+    const tanHalfFov = Math.tan((CAMERA_FOV_DEG * Math.PI / 180) * 0.5);
+    const dist = halfDepth * (Math.cos(DEFAULT_ELEVATION) + (Math.sin(DEFAULT_ELEVATION) / tanHalfFov));
+    return clamp(dist, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
   };
 
-  function resetOrbitForHeatmap(){
-    const r = MAX_RANGE;
-    ORBIT.azimuth   = DEFAULT_AZIMUTH;
-    ORBIT.elevation = DEFAULT_ELEVATION;
-    ORBIT.distance  = clamp(r * DEFAULT_DISTANCE_FACTOR, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
+  function activeBounds(){
+    return floorplanEnabled ? FLOORPLAN_BOUNDS : BASE_BOUNDS;
   }
 
-  let orbitDragging=false, orbitLastX=0, orbitLastY=0;
+  function recenterOrbitTarget(bounds=activeBounds()){
+    ORBIT_TARGET.x = (bounds.xMin + bounds.xMax) * 0.5;
+    ORBIT_TARGET.z = (bounds.yMin + bounds.yMax) * 0.5;
+  }
+
+  function clampOrbitTarget(bounds=activeBounds()){
+    const marginX = Math.max(40, (bounds.xMax - bounds.xMin) * 0.12);
+    const marginZ = Math.max(40, (bounds.yMax - bounds.yMin) * 0.12);
+    ORBIT_TARGET.x = clamp(ORBIT_TARGET.x, bounds.xMin - marginX, bounds.xMax + marginX);
+    ORBIT_TARGET.z = clamp(ORBIT_TARGET.z, bounds.yMin - marginZ, bounds.yMax + marginZ);
+  }
+
+  function resetOrbit(dist=DEFAULT_ORBIT_DIST){
+    recenterOrbitTarget();
+    ORBIT.azimuth   = DEFAULT_AZIMUTH;
+    ORBIT.elevation = DEFAULT_ELEVATION;
+    ORBIT.distance  = clamp(dist, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
+  }
+
+  let floorplanWallsDirty=false;
+
+  function markFloorplanWallsDirty(){
+    floorplanWallsDirty=true;
+  }
+
+  function resetFloorplanOrbitFromInitialEdge(){
+    const b = FLOORPLAN_INITIAL_BOUNDS;
+    ORBIT_TARGET.x = (b.xMin + b.xMax) * 0.5;
+    ORBIT_TARGET.z = (b.yMin + b.yMax) * 0.5;
+    ORBIT.azimuth = 0;
+    ORBIT.elevation = DEFAULT_ELEVATION;
+    ORBIT.distance = defaultOrbitDistance(b);
+  }
+
+  const resetOrbitIf3D=()=>{
+    if(viewDim !== '3d') return;
+    if(floorplanEnabled) resetFloorplanOrbitFromInitialEdge();
+    else resetOrbit(defaultOrbitDistance());
+  };
+
+  let orbitDragging=false, orbitLastX=0, orbitLastY=0, orbitDragMode='orbit';
   let pinchZooming=false, pinchLastDist=0;
+  let touchMode=null;
+  let resizeScheduled=false;
 
   const cam3D = {
     pos:{x:0,y:0,z:0},
@@ -310,8 +556,8 @@
     cosA:0,sinA:0,cosE:0,sinE:0,
     scale:1,
     cx:0,cy:0,
-    near:0.5,
-    fovDeg:60,
+    near:0.05,
+    fovDeg:CAMERA_FOV_DEG,
     aspect:1
   };
 
@@ -320,7 +566,54 @@
   const LIVE_INTERVAL_MS=30;
 
   const cssVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const uiScale=()=>parseFloat(cssVar('--ui')||'1')||1;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const hairline=()=>1/Math.max(1,dpr);
+  const alignPx=(v)=>Math.round(v)+0.5*hairline();
+  const IS_MOBILE = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && !matchMedia('(any-pointer: fine)').matches);
+  const WALL_COLOR='rgba(185,194,207,0.9)';
+  const WALL_FILL='rgba(185,194,207,0.14)';
+  const WALL_HANDLE_SHADOW='rgba(0,0,0,0.4)';
+  const HANDLE_RADIUS_PX = IS_MOBILE ? 5 * 0.7 : 4.2 * 0.85;
+  function handleScale(){
+    const base = IS_MOBILE ? 0.85 : 1;
+    return base;
+  }
+  const wallStrokeWidth=()=>Math.max(1.3, hairline()*2.2) * handleScale();
+  const wallHandleRadius=()=>HANDLE_RADIUS_PX;
+  const wallStyle=()=>({stroke:WALL_COLOR,fill:WALL_FILL,fillAlpha:1,width:wallStrokeWidth()});
+
+  const cam2D = {
+    zoom:1,
+    cx:(X_MIN+X_MAX)*0.5,
+    cy:(Y_MIN+Y_MAX)*0.5
+  };
+
+  const camFP = {
+    zoom:1,
+    cx:(FLOORPLAN_BOUNDS.xMin+FLOORPLAN_BOUNDS.xMax)*0.5,
+    cy:(FLOORPLAN_BOUNDS.yMin+FLOORPLAN_BOUNDS.yMax)*0.5
+  };
+
+  function reset2DCam(){
+    cam2D.zoom=1;
+    cam2D.cx=(X_MIN+X_MAX)*0.5;
+    cam2D.cy=(Y_MIN+Y_MAX)*0.5;
+  }
+
+  function resetFPCam(){
+    fitFloorplanCamToBounds(FLOORPLAN_INITIAL_BOUNDS);
+  }
+
+  const activeCam=()=> floorplanEnabled ? camFP : cam2D;
+  const activeBounds2D=()=> floorplanEnabled ? FLOORPLAN_BOUNDS : BASE_BOUNDS;
+
+  function clampCam(cam,bounds){
+    const halfW = (bounds.xMax - bounds.xMin) * 0.55;
+    const halfH = (bounds.yMax - bounds.yMin) * 0.55;
+    cam.cx = clamp(cam.cx, bounds.xMin - halfW, bounds.xMax + halfW);
+    cam.cy = clamp(cam.cy, bounds.yMin - halfH, bounds.yMax + halfH);
+  }
 
   function smoothstep01(t){
     t = clamp(t,0,1);
@@ -366,7 +659,64 @@
 
   function setStatus(kind,msg){
     sDot.className='dot status-icon'+(kind?(' '+kind):'');
-    sText.value=msg;
+    sText.value=msg||'';
+  }
+
+  function setReady() {
+    setStatus('ok', 'Ready');
+  }
+
+  function setLoadingHeatmap() {
+    setStatus('ok', 'Loading heatmap…');
+  }
+
+  function setSaved() {
+    setStatus('ok', 'Saved');
+  }
+
+  function setCleared() {
+    setStatus('ok', 'Cleared');
+  }
+
+  function setError(msg) {
+    setStatus('err', msg || 'Error');
+  }
+
+  window.addEventListener('error',e=>{
+    const message = e?.error?.message || e?.message || 'Error';
+    setError(message);
+  });
+  window.addEventListener('unhandledrejection',e=>{
+    const reason = e?.reason;
+    const message = reason ? (reason.message || String(reason)) : 'Error';
+    setError(message);
+  });
+
+  function populateDevices(list, selectedId, targetSel=sel){
+    if(!targetSel) return;
+    targetSel.innerHTML='';
+    list.sort((a,b)=>(a.name||a.device_id).localeCompare(b.name||b.device_id))
+      .forEach((d,i)=>{
+        const opt=document.createElement('option');
+        opt.value=d.device_id;
+        opt.textContent=d.name||d.device_id;
+        opt.dataset.model=d.model||'';
+        if(selectedId ? d.device_id===selectedId : i===0) opt.selected=true;
+        targetSel.appendChild(opt);
+      });
+  }
+
+  function populateFloors(list, selectedId){
+    sel.innerHTML='';
+    list.sort((a,b)=>(a.name||a.floor_id).localeCompare(b.name||b.floor_id))
+      .forEach((f,i)=>{
+        const opt=document.createElement('option');
+        opt.value=f.floor_id;
+        opt.textContent=f.name||f.floor_id;
+        opt.dataset.icon=f.icon||'';
+        if(selectedId ? f.floor_id===selectedId : i===0) opt.selected=true;
+        sel.appendChild(opt);
+      });
   }
 
   async function api(path, body, {retryOnError=true, reloadOnError=true}={}){
@@ -397,7 +747,14 @@
       }
       localStorage.removeItem(BOOT_KEY);
       const ct=r.headers.get('content-type')||'';
-      return ct.includes('application/json')?JSON.parse(text):text;
+      if(ct.includes('application/json')){
+        try{
+          return JSON.parse(text);
+        }catch(e){
+          throw new Error('JSON parse error: '+(e.message||e)+'. Body: '+text.slice(0,200));
+        }
+      }
+      return text;
       }catch(err){
       if(reloadOnError && err instanceof TypeError && !localStorage.getItem(BOOT_KEY)){
         localStorage.setItem(BOOT_KEY,'1');
@@ -451,49 +808,66 @@
 `.trim());
 
 
+  async function fetchTargetsForDevice(deviceId){
+    const tpl=targetsTemplate(deviceId);
+    const res=await api('api/template',{template:tpl},{retryOnError:false,reloadOnError:false});
+    const obj=(typeof res==='string')?JSON.parse(res||'{}'):res;
+    const lpMap = livePosFor(deviceId);
+    let changed=false;
+    for (const n of [1, 2, 3]) {
+      const item = obj?.[String(n)] || {};
+      const x = Number(item.x);
+      const y = Number(item.y);
+
+      const lp = lpMap[n];
+      const prevX = lp.x;
+      const prevY = lp.y;
+
+      if (Number.isFinite(x) && x !== lp.x) {
+        lp.x = x;
+        changed = true;
+      }
+      if (Number.isFinite(y) && y !== lp.y) {
+        lp.y = y;
+        changed = true;
+      }
+
+      if (
+        Number.isFinite(prevX) && Number.isFinite(prevY) &&
+        Number.isFinite(lp.x) && Number.isFinite(lp.y)
+      ) {
+        const dx = lp.x - prevX;
+        const dz = lp.y - prevY;
+
+        const dist2 = dx * dx + dz * dz;
+        if (dist2 > 5) {
+          lp.heading = Math.atan2(dx, dz);
+        }
+      }
+
+      lp.px = prevX;
+      lp.py = prevY;
+    }
+    return changed;
+  }
+
   async function fetchTargets(){
-    if(!selectedDevice || liveInFlight || document.visibilityState==='hidden') return;
+    if(liveInFlight || document.visibilityState==='hidden') return;
+    const devIds=new Set();
+    if(selectedDevice?.device_id) devIds.add(selectedDevice.device_id);
+    if(floorplanEnabled){
+      floorplanSensors.forEach(s=>{ if(s.device_id) devIds.add(s.device_id); });
+    }
+    if(!devIds.size && selectedDevice?.device_id) devIds.add(selectedDevice.device_id);
+    if(!devIds.size) return;
     liveInFlight=true;
     try{
-      const tpl=targetsTemplate(selectedDevice.device_id);
-      const res=await api('api/template',{template:tpl},{retryOnError:false,reloadOnError:false});
-      const obj=(typeof res==='string')?JSON.parse(res||'{}'):res;
-      let changed=false;
-      for (const n of [1, 2, 3]) {
-        const item = obj?.[String(n)] || {};
-        const x = Number(item.x);
-        const y = Number(item.y);
-
-        const lp = livePos[n];
-        const prevX = lp.x;
-        const prevY = lp.y;
-
-        if (Number.isFinite(x) && x !== lp.x) {
-          lp.x = x;
-          changed = true;
-        }
-        if (Number.isFinite(y) && y !== lp.y) {
-          lp.y = y;
-          changed = true;
-        }
-
-        if (
-          Number.isFinite(prevX) && Number.isFinite(prevY) &&
-          Number.isFinite(lp.x) && Number.isFinite(lp.y)
-        ) {
-          const dx = lp.x - prevX;
-          const dz = lp.y - prevY;
-
-          const dist2 = dx * dx + dz * dz;
-          if (dist2 > 5) {
-            lp.heading = Math.atan2(dx, dz);
-          }
-        }
-
-        lp.px = prevX;
-        lp.py = prevY;
+      let changedAny=false;
+      for(const devId of devIds){
+        const changed = await fetchTargetsForDevice(devId);
+        if(changed) changedAny=true;
       }
-      if(changed) enqueueDraw();
+      if(changedAny) enqueueDraw();
     }catch(_e){} finally{ liveInFlight=false; }
   }
 
@@ -529,40 +903,183 @@
       x:(i)=>`zone_${z}_p${i}_x`,
       y:(i)=>`zone_${z}_p${i}_y`
     };
-    
   }
-    async function loadDeviceEntitiesCore(device_id){
+  async function loadDeviceEntitiesCore(device_id){
     const rows=await api('api/device_entities',{device_id},{reloadOnError:false});
     const arr=Array.isArray(rows)?rows:JSON.parse(rows||'[]');
     entities=arr.map(e=>({entity_id:e.entity_id,domain:e.domain,state:e.state,attributes:e.attributes||{}}));
+  }
+
+  async function loadFloorsCore(){
+    const r=await fetch('api/floors',{method:'GET',credentials:'include'});
+    const text=await r.text();
+    if(!r.ok){
+      let msg=r.status+' '+r.statusText;
+      try{
+        const j=JSON.parse(text);
+        msg=(j.error||msg)+(j.details?` (${j.details})`:'');
+      }catch{}
+      throw new Error(msg);
+    }
+    let res=text;
+    const ct=r.headers.get('content-type')||'';
+    if(ct.includes('application/json')){
+      try{ res=text?JSON.parse(text):[]; }catch(e){ throw new Error('JSON parse error: '+(e.message||e)); }
+    }else if(typeof res==='string'){
+      try{ res=JSON.parse(res||'[]'); }catch{}
+    }
+    const arr=Array.isArray(res)?res:[];
+    floorsList=arr.map(f=>{
+      if(typeof f==='string') return {floor_id:f,name:f,icon:''};
+      return {floor_id:f.floor_id||f.id||'', name:f.name||f.floor_id||f.id||'', icon:f.icon||''};
+    }).filter(f=>f.floor_id);
+    if(floorsList.length){
+      populateFloors(floorsList, selectedFloorId);
+      selectedFloorId = sel.value || selectedFloorId || (floorsList[0]?.floor_id ?? null);
+    }
+  }
+
+  function syncFloorplanDeviceSelector(){
+    if(!floorplanDeviceSel) return;
+    populateDevices(devicesList, selectedDevice?.device_id, floorplanDeviceSel);
+  }
+
+  function selectedDeviceFromSelect(selectEl){
+    if(!selectEl || !selectEl.value) return null;
+    const opt=selectEl.options[selectEl.selectedIndex] || selectEl.options[0];
+    if(!opt || !opt.value) return null;
+    return {
+      device_id: opt.value,
+      name: opt.textContent || opt.value,
+      model: opt.dataset.model || ''
+    };
+  }
+
+  function placementDevice(){
+    return selectedDeviceFromSelect(floorplanDeviceSel) || selectedDeviceFromSelect(sel) || selectedDevice || null;
+  }
+
+  const sensorAngle=(s)=> (s && Number.isFinite(s.angle)) ? s.angle : 0;
+  const cloneZones=(src)=>({
+    '1':[...(src?.['1']||[])].map(p=>({x:p.x,y:p.y})),
+    '2':[...(src?.['2']||[])].map(p=>({x:p.x,y:p.y})),
+    '3':[...(src?.['3']||[])].map(p=>({x:p.x,y:p.y})),
+    'excl':[...(src?.['excl']||[])].map(p=>({x:p.x,y:p.y}))
+  });
+  const makeSensor=(x,y,dev)=>({
+    x,y,
+    angle:0,
+    device_id:dev?.device_id||'',
+    name:dev?.name||'',
+    model:dev?.model||'',
+    detRange: detRange,
+    zones: cloneZones(zones)
+  });
+  const sensorDetRange=(s)=> s && s.device_id===selectedDevice?.device_id ? detRange :
+    (Number.isFinite(s?.detRange)?s.detRange:detRange);
+  const sensorZones=(s)=> s && s.device_id===selectedDevice?.device_id ? zones : (s?.zones || zones);
+  const clampSensorPos=(s)=>{
+    const cloned = {...s};
+    cloned.x=clamp(Number(s.x)||0,FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax);
+    cloned.y=clamp(Number(s.y)||0,FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax);
+    cloned.angle=Number(s.angle)||0;
+    cloned.detRange=Number.isFinite(s.detRange)?clamp(Number(s.detRange),Y_MIN,MAX_RANGE):detRange;
+    cloned.zones = cloneZones(s.zones||zones);
+    return cloned;
+  };
+
+  function adoptZonesFromSensor(sensor){
+    if(!sensor) return;
+    zones = cloneZones(sensor.zones || zones);
+    if(Number.isFinite(sensor.detRange)){
+      detRange = clamp(sensor.detRange, Y_MIN, MAX_RANGE);
+      syncRangeInputs(detRange);
+    }
+    enqueueDraw();
+  }
+
+  function selectSensorContext(sensor){
+    if(!sensor || !sensor.device_id) return;
+    selectedDevice={device_id:sensor.device_id,name:sensor.name||sensor.device_id,model:sensor.model||''};
+    adoptZonesFromSensor(sensor);
+    if(!currentZone) setCurrentZone('1');
+  }
+
+  function updateModeSections(){
+    if(rangeSection){
+      rangeSection.style.display = floorplanEnabled ? 'none' : '';
+    }
+    if(floorplanDeviceSection){
+      floorplanDeviceSection.style.display = floorplanEnabled ? '' : 'none';
+      if(floorplanEnabled) syncFloorplanDeviceSelector();
+    }
+  }
+
+  function showDeviceSelector(){
+    if(floorplanEnabled){
+      deviceTitle.textContent='Floor';
+      sel.setAttribute('aria-label','Floor list');
+      if(floorsList.length){
+        populateFloors(floorsList, selectedFloorId);
+        selectedFloorId = sel.value || selectedFloorId || (floorsList[0]?.floor_id ?? null);
+      }else{
+        sel.innerHTML='';
+      }
+      syncFloorplanDeviceSelector();
+      updateModeSections();
+      return;
+    }
+    deviceTitle.textContent='Device';
+    sel.setAttribute('aria-label','Device list');
+    if(devicesList.length){
+      populateDevices(devicesList, selectedDevice?.device_id);
+      const val=sel.value;
+      if(val){
+        const entry=devicesList.find(d=>d.device_id===val);
+        selectedDevice = entry
+          ? {device_id:entry.device_id,name:entry.name||entry.device_id,model:entry.model||''}
+          : {device_id:val,name:val,model:''};
+      }
+    }else{
+      sel.innerHTML='';
+    }
+    syncFloorplanDeviceSelector();
+    updateModeSections();
+  }
+
+  const activeRangeInput=()=> (floorplanEnabled && floorplanRangeInput) ? floorplanRangeInput : rangeInput;
+  function syncRangeInputs(val){
+    if(rangeInput) rangeInput.value=String(val);
+    if(floorplanRangeInput) floorplanRangeInput.value=String(val);
   }
 
   async function loadDetectionRangeCore(){
     let v=readNumberBySuffix('detection_range_cm');
     if(v===null) v=readNumberBySuffix('detection_range');
     detRange=Math.round(Math.max(Y_MIN,Math.min(MAX_RANGE,v??MAX_RANGE)));
-    rangeInput.value=String(detRange);
+    syncRangeInputs(detRange);
   }
 
-  async function setDetectionRangeCore(){
-    let val=Math.round(Number(rangeInput.value));
+  async function setDetectionRangeCore(inputEl=activeRangeInput()){
+    const src=inputEl||activeRangeInput();
+    let val=Math.round(Number(src?.value));
     if(!Number.isFinite(val)){
-      setStatus('err','Invalid range');
       return;
     }
     val=Math.max(Y_MIN,Math.min(MAX_RANGE,val));
     try{
-      setStatus('','Saving range…');
       try{
         await setNumberBySuffix('detection_range_cm',val);
       }catch{
         await setNumberBySuffix('detection_range',val);
       }
       detRange=val;
-      setStatus('ok','Range: '+val+' cm');
+      syncRangeInputs(val);
+      syncActiveSensorState();
+      setSaved();
       enqueueDraw();
     }catch(e){
-      setStatus('err',e.message||'Failed to save range');
+      setError(e?.message || 'Save failed');
     }
   }
 
@@ -580,24 +1097,45 @@
 
   async function loadAllCore(){
     if(!selectedDevice){
-      setStatus('err','Select a device');
+      setError('No data available');
       return;
     }
-    setStatus('','Loading…');
     await loadDetectionRangeCore();
     for(const z of ['1','2','3','excl']) await loadZoneCore(z);
     enqueueDraw();
-    setStatus('ok','Ready');
+  }
+
+  async function fetchZonesFromDevice(dev){
+    const target = dev || selectedDevice;
+    if(!target || !target.device_id){
+      setError('No data available');
+      return false;
+    }
+    selectedDevice={
+      device_id: target.device_id,
+      name: target.name || target.device_id,
+      model: target.model || ''
+    };
+    await loadDeviceEntities(target.device_id);
+    await loadAll();
+    const sensorIdx = floorplanSensors.findIndex(s=>s.device_id===selectedDevice.device_id);
+    if(sensorIdx>=0){
+      floorplanSensors[sensorIdx]=clampSensorPos({
+        ...floorplanSensors[sensorIdx],
+        detRange: detRange,
+        zones: cloneZones(zones)
+      });
+    }
+    return true;
   }
 
   async function saveCurrentZoneCore(){
     if(saving) return;
     if(!selectedDevice){
-      setStatus('err','No device');
+      setError('Save failed');
       return;
     }
     if(!currentZone){
-      setStatus('err','Select a zone first');
       return;
     }
     const id=zid(currentZone);
@@ -606,7 +1144,6 @@
     try{
       saving=true;
       saveBtn.disabled=true;
-      setStatus('','Saving '+id.label+'…');
       const tasks=[];
       for(let i=1;i<=MAX_POINTS;i++){
         const p=pts[i-1]||{x:0,y:0};
@@ -615,15 +1152,108 @@
       }
       await Promise.allSettled(tasks);
       await setNumberBySuffix(id.count,n);
-      setStatus('ok',`Saved (${n} point${n===1?'':'s'})`);
+      setSaved();
       await loadZoneCore(currentZone);
       enqueueDraw();
     }catch(e){
-      setStatus('err',e.message||'Save failed');
+      setError(e?.message || 'Save failed');
     }finally{
       saving=false;
       saveBtn.disabled=false;
     }
+  }
+
+  async function saveAllZonesForSelectedDevice(){
+    if(saving) return;
+    if(!selectedDevice){
+      setError('Save failed');
+      return;
+    }
+    const tasks=[];
+    try{
+      saving=true;
+      saveBtn.disabled=true;
+      for(const z of ['1','2','3','excl']){
+        const id=zid(z);
+        const pts=zones[z]||[];
+        const n=Math.min(MAX_POINTS,pts.length);
+        for(let i=1;i<=MAX_POINTS;i++){
+          const p=pts[i-1]||{x:0,y:0};
+          tasks.push(setNumberBySuffix(id.x(i),Math.round(clamp(p.x||0,X_MIN,X_MAX))));
+          tasks.push(setNumberBySuffix(id.y(i),Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
+        }
+        tasks.push(setNumberBySuffix(id.count,n));
+      }
+      await Promise.allSettled(tasks);
+      setSaved();
+    }catch(e){
+      setError(e?.message || 'Save failed');
+    }finally{
+      saving=false;
+      saveBtn.disabled=false;
+    }
+  }
+
+  async function saveAllZonesForDevice(deviceId, zonesToSave){
+    if(!deviceId) return;
+    await loadDeviceEntitiesCore(deviceId);
+    const tasks=[];
+    const srcZones = cloneZones(zonesToSave || {});
+    for(const z of ['1','2','3','excl']){
+      const id=zid(z);
+      const pts=srcZones[z]||[];
+      const n=Math.min(MAX_POINTS,pts.length);
+      for(let i=1;i<=MAX_POINTS;i++){
+        const p=pts[i-1]||{x:0,y:0};
+        tasks.push(setNumberBySuffix(id.x(i),Math.round(clamp(p.x||0,X_MIN,X_MAX))));
+        tasks.push(setNumberBySuffix(id.y(i),Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
+      }
+      tasks.push(setNumberBySuffix(id.count,n));
+    }
+    await Promise.allSettled(tasks);
+  }
+
+  async function saveAllFloorplanSensorZones(){
+    let ok = true;
+    if(saving) return false;
+    const sensors = floorplanSensors.filter(s=>s.device_id);
+    if(!sensors.length){
+      if(selectedDevice?.device_id){
+        saving=true;
+        saveBtn.disabled=true;
+        try{
+          await saveAllZonesForDevice(selectedDevice.device_id, zones);
+        }catch(e){
+          setError(e?.message || 'Save failed');
+          ok = false;
+        }finally{
+          saving=false;
+          saveBtn.disabled=false;
+        }
+      }
+      return ok;
+    }
+
+    const unique=new Map();
+    sensors.forEach(s=>{
+      if(!unique.has(s.device_id)) unique.set(s.device_id,s);
+    });
+    const restoreDeviceId=selectedDevice?.device_id;
+    saving=true;
+    saveBtn.disabled=true;
+    try{
+      for(const sensor of unique.values()){
+        await saveAllZonesForDevice(sensor.device_id, sensor.zones || {});
+      }
+    }catch(e){
+      setError(e?.message || 'Save failed');
+      ok = false;
+    }finally{
+      saving=false;
+      saveBtn.disabled=false;
+      if(restoreDeviceId) await loadDeviceEntitiesCore(restoreDeviceId);
+    }
+    return ok;
   }
 
   function parsePx(v){ return Number((v||'0').toString().replace('px',''))||0; }
@@ -668,6 +1298,7 @@
     if(cvs.width!==devW) cvs.width=devW;
     if(cvs.height!==devH) cvs.height=devH;
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.imageSmoothingEnabled=false;
   }
 
   function syncLayout(){
@@ -680,36 +1311,316 @@
 
   function innerW(){ return Math.max(2,cssW-2*PAD); }
   function innerH(){ return Math.max(2,cssH-2*PAD); }
-  const toPxX=(x)=> PAD+(x-X_MIN)/WORLD_W*innerW();
-  const toPxY=(y)=> PAD+(y-Y_MIN)/WORLD_H*innerH();
-  const toCmX=(px)=> X_MIN+((px-PAD)/innerW())*WORLD_W;
-  const toCmY=(py)=> Y_MIN+((py-PAD)/innerH())*WORLD_H;
+  const baseScaleX = ()=>innerW()/WORLD_W;
+  const baseScaleY = ()=>innerH()/WORLD_H;
+  const fpBaseScaleX = ()=>innerW()/FLOORPLAN_W;
+  const fpBaseScaleY = ()=>innerH()/FLOORPLAN_H;
+
+  function fitFloorplanCamToBounds(bounds){
+    const boundsW = Math.max(1e-6, bounds.xMax - bounds.xMin);
+    const boundsH = Math.max(1e-6, bounds.yMax - bounds.yMin);
+    const zoomX = innerW() / (boundsW * fpBaseScaleX());
+    const zoomY = innerH() / (boundsH * fpBaseScaleY());
+    camFP.zoom = clamp(Math.min(zoomX, zoomY), MIN_ZOOM_2D, MAX_ZOOM_2D);
+    camFP.cx = (bounds.xMin + bounds.xMax) * 0.5;
+    camFP.cy = (bounds.yMin + bounds.yMax) * 0.5;
+    clampCam(camFP, FLOORPLAN_BOUNDS);
+  }
+
+  function floorplanMinZoomToFit(){
+    const b = FLOORPLAN_BOUNDS;
+    const w = b.xMax - b.xMin;
+    const h = b.yMax - b.yMin;
+    const zx = innerW() / (w * fpBaseScaleX());
+    const zy = innerH() / (h * fpBaseScaleY());
+    const z = Math.min(zx, zy);
+    return (Number.isFinite(z) && z > 0) ? z : 0.1;
+  }
+
+  function getFloorplanWallsBounds(){
+    let xMin=Infinity, xMax=-Infinity, yMin=Infinity, yMax=-Infinity;
+    let hasSegments=false;
+    for(const line of floorplanPolylines){
+      if(!line || line.length<2) continue;
+      hasSegments=true;
+      for(const p of line){
+        const x=Number(p?.x);
+        const y=Number(p?.y);
+        if(!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        xMin=Math.min(xMin,x);
+        xMax=Math.max(xMax,x);
+        yMin=Math.min(yMin,y);
+        yMax=Math.max(yMax,y);
+      }
+    }
+    if(!hasSegments || !Number.isFinite(xMin)) return null;
+    let cx = (xMin + xMax) * 0.5;
+    let cy = (yMin + yMax) * 0.5;
+    let w = xMax - xMin;
+    let h = yMax - yMin;
+    const minSize = 1;
+    if(w < minSize){
+      w = minSize;
+      xMin = cx - w * 0.5;
+      xMax = cx + w * 0.5;
+    }
+    if(h < minSize){
+      h = minSize;
+      yMin = cy - h * 0.5;
+      yMax = cy + h * 0.5;
+    }
+    cx = (xMin + xMax) * 0.5;
+    cy = (yMin + yMax) * 0.5;
+    return {xMin,xMax,yMin,yMax,cx,cy,w,h};
+  }
+
+  function padFloorplanBounds(bounds){
+    if(!bounds) return null;
+    const pad = Math.max(80, 0.15 * Math.max(bounds.w, bounds.h));
+    const xMin = bounds.xMin - pad;
+    const xMax = bounds.xMax + pad;
+    const yMin = bounds.yMin - pad;
+    const yMax = bounds.yMax + pad;
+    const w = (bounds.w + pad * 2);
+    const h = (bounds.h + pad * 2);
+    const cx = (xMin + xMax) * 0.5;
+    const cy = (yMin + yMax) * 0.5;
+    return {xMin,xMax,yMin,yMax,cx,cy,w,h};
+  }
+
+  function floorplanOrbitDistanceForBounds(bounds){
+    const width = Number.isFinite(bounds?.w) ? bounds.w : (bounds.xMax - bounds.xMin);
+    const height = Number.isFinite(bounds?.h) ? bounds.h : (bounds.yMax - bounds.yMin);
+    const maxDim = Math.max(width || 0, height || 0);
+    const halfDepth = Math.max(1e-6, maxDim * 0.5);
+    const tanHalfFov = Math.tan((CAMERA_FOV_DEG * Math.PI / 180) * 0.5);
+    const dist = halfDepth * (Math.cos(DEFAULT_ELEVATION) + (Math.sin(DEFAULT_ELEVATION) / tanHalfFov));
+    return clamp(dist, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
+  }
+
+  function shouldAutoFitFloorplanNow(){
+    if(!floorplanEnabled) return false;
+    if(floorplanTool === 'draw') return false;
+    if(floorplanActiveLine !== null) return false;
+    if(floorplanPreview) return false;
+    if(floorplanDragMode) return false;
+    return true;
+  }
+
+  function zoomAllowed(){
+    return floorplanEnabled === true;
+  }
+
+  function fitFloorplan2DToBounds(bounds){
+    if(!bounds){
+      resetFPCam();
+      return;
+    }
+    const padded = padFloorplanBounds(bounds);
+    fitFloorplanCamToBounds(padded);
+  }
+
+  function fitFloorplan3DToBounds(bounds, {resetAngles=false}={}){
+    if(!bounds){
+      resetFloorplanOrbitFromInitialEdge();
+      return;
+    }
+    const padded = padFloorplanBounds(bounds);
+    ORBIT_TARGET.x = padded.cx;
+    ORBIT_TARGET.z = padded.cy;
+    if(resetAngles){
+      ORBIT.azimuth = DEFAULT_AZIMUTH;
+      ORBIT.elevation = DEFAULT_ELEVATION;
+    }
+    ORBIT.distance = floorplanOrbitDistanceForBounds(padded);
+  }
+
+  function applyFloorplanAutoFit({resetAngles=false}={}){
+    if(!shouldAutoFitFloorplanNow()) return;
+    const bounds = getFloorplanWallsBounds();
+    if(viewDim === '2d') fitFloorplan2DToBounds(bounds);
+    else fitFloorplan3DToBounds(bounds, {resetAngles});
+  }
+
+  function applyFloorplanAutoFitIfDirty(){
+    if(!floorplanWallsDirty) return;
+    floorplanWallsDirty=false;
+    applyFloorplanAutoFit();
+  }
+
+  function toPxX(x){
+    return PAD + innerW()*0.5 + (x - cam2D.cx) * baseScaleX() * cam2D.zoom;
+  }
+  function toPxY(y){
+    return PAD + innerH()*0.5 + (y - cam2D.cy) * baseScaleY() * cam2D.zoom;
+  }
+  function toCmX(px){
+    return cam2D.cx + ((px - PAD - innerW()*0.5) / (baseScaleX()*cam2D.zoom));
+  }
+  function toCmY(py){
+    return cam2D.cy + ((py - PAD - innerH()*0.5) / (baseScaleY()*cam2D.zoom));
+  }
+
+  function fpToPxX(x){
+    return PAD + innerW()*0.5 + (x - camFP.cx) * fpBaseScaleX() * camFP.zoom;
+  }
+  function fpToPxY(y){
+    return PAD + innerH()*0.5 + (y - camFP.cy) * fpBaseScaleY() * camFP.zoom;
+  }
+  function fpFromPxX(px){
+    return camFP.cx + ((px - PAD - innerW()*0.5)/(fpBaseScaleX()*camFP.zoom));
+  }
+  function fpFromPxY(py){
+    return camFP.cy + ((py - PAD - innerH()*0.5)/(fpBaseScaleY()*camFP.zoom));
+  }
+
+  function zoom2D(factor, pivotPx, pivotPy){
+    const cam = activeCam();
+    const bounds = activeBounds2D();
+    if(floorplanEnabled && viewDim==='2d'){
+      const minZoom = floorplanMinZoomToFit();
+      const requested = camFP.zoom * factor;
+      if(requested <= minZoom + 1e-6){
+        camFP.zoom = minZoom;
+        camFP.cx = (FLOORPLAN_BOUNDS.xMin + FLOORPLAN_BOUNDS.xMax) * 0.5;
+        camFP.cy = (FLOORPLAN_BOUNDS.yMin + FLOORPLAN_BOUNDS.yMax) * 0.5;
+        clampCam(camFP, FLOORPLAN_BOUNDS);
+        return;
+      }
+    }
+    const minZoom = floorplanEnabled ? floorplanMinZoomToFit() : MIN_ZOOM_2D;
+    const oldZoom = cam.zoom;
+    const newZoom = clamp(cam.zoom * factor, minZoom, MAX_ZOOM_2D);
+    if(Math.abs(newZoom - oldZoom) < 1e-6) return;
+    const worldBefore = floorplanEnabled
+      ? {x: fpFromPxX(pivotPx), y: fpFromPxY(pivotPy)}
+      : {x: toCmX(pivotPx), y: toCmY(pivotPy)};
+    cam.zoom = newZoom;
+    const worldAfter = floorplanEnabled
+      ? {x: fpFromPxX(pivotPx), y: fpFromPxY(pivotPy)}
+      : {x: toCmX(pivotPx), y: toCmY(pivotPy)};
+    cam.cx += (worldBefore.x - worldAfter.x);
+    cam.cy += (worldBefore.y - worldAfter.y);
+    clampCam(cam,bounds);
+  }
+
+  function pan2D(dx,dy){
+    const cam = activeCam();
+    const bounds = activeBounds2D();
+    const scaleX = floorplanEnabled ? fpBaseScaleX() : baseScaleX();
+    const scaleY = floorplanEnabled ? fpBaseScaleY() : baseScaleY();
+    cam.cx -= dx / (scaleX * cam.zoom);
+    cam.cy -= dy / (scaleY * cam.zoom);
+    clampCam(cam,bounds);
+  }
 
   function drawGrid(){
     ctx.save();
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
-    ctx.lineWidth=1;
+    ctx.lineWidth=hairline();
     const gridColor=cssVar('--grid')||'#1e2431';
     ctx.strokeStyle=gridColor;
-    ctx.globalAlpha=0.6;
+    ctx.globalAlpha=1;
 
     const x0=Math.ceil(X_MIN/GRID)*GRID, y0=Math.ceil(Y_MIN/GRID)*GRID;
     for(let x=x0;x<=X_MAX;x+=GRID){
-      const px=Math.round(toPxX(x))+0.5;
+      const px=alignPx(toPxX(x));
       ctx.beginPath();
-      ctx.moveTo(px,Math.round(toPxY(Y_MIN))+0.5);
-      ctx.lineTo(px,Math.round(toPxY(Y_MAX))+0.5);
+      ctx.moveTo(px,alignPx(toPxY(Y_MIN)));
+      ctx.lineTo(px,alignPx(toPxY(Y_MAX)));
       ctx.stroke();
     }
     for(let y=y0;y<=Y_MAX;y+=GRID){
-      const py=Math.round(toPxY(y))+0.5;
+      const py=alignPx(toPxY(y));
       ctx.beginPath();
-      ctx.moveTo(Math.round(toPxX(X_MIN))+0.5,py);
-      ctx.lineTo(Math.round(toPxX(X_MAX))+0.5,py);
+      ctx.moveTo(alignPx(toPxX(X_MIN)),py);
+      ctx.lineTo(alignPx(toPxX(X_MAX)),py);
       ctx.stroke();
     }
     ctx.globalAlpha=1;
     ctx.restore();
+  }
+
+  function drawFloorplanGrid2D(){
+    ctx.save();
+    ctx.lineWidth=hairline();
+    const gridColor=cssVar('--grid')||'#1e2431';
+    ctx.strokeStyle=gridColor;
+    ctx.globalAlpha=1;
+
+    const b=FLOORPLAN_BOUNDS;
+    const step=GRID;
+    const x0=Math.ceil(b.xMin/step)*step;
+    const y0=Math.ceil(b.yMin/step)*step;
+    const xMax=b.xMax;
+    const yMax=b.yMax;
+
+    for(let x=x0;x<=xMax;x+=step){
+      const px=alignPx(fpToPxX(x));
+      ctx.beginPath();
+      ctx.moveTo(px,alignPx(fpToPxY(b.yMin)));
+      ctx.lineTo(px,alignPx(fpToPxY(b.yMax)));
+      ctx.stroke();
+    }
+    for(let y=y0;y<=yMax;y+=step){
+      const py=alignPx(fpToPxY(y));
+      ctx.beginPath();
+      ctx.moveTo(alignPx(fpToPxX(b.xMin)),py);
+      ctx.lineTo(alignPx(fpToPxX(b.xMax)),py);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
+  function drawFloorplan2DView(){
+    drawFloorplanGrid2D();
+    drawFloorplanPolylines();
+    drawFloorplanPreviewLine();
+    drawFloorplanSensorOverlay2D();
+    const sensorColor = WALL_COLOR;
+    const sensorRadius = wallHandleRadius();
+    floorplanSensors.forEach(s=>{
+      const showHandles = floorplanTool==='sensor';
+      if(!showHandles) return;
+      const h = sensorHandleWorld(s);
+      if(h){
+        const hx=alignPx(fpToPxX(h.x)), hy=alignPx(fpToPxY(h.y));
+        ctx.save();
+        ctx.fillStyle=sensorColor;
+        ctx.strokeStyle=WALL_HANDLE_SHADOW;
+        ctx.lineWidth=hairline();
+        ctx.beginPath();
+        ctx.arc(hx,hy,sensorRadius,0,Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.save();
+      const x=alignPx(fpToPxX(s.x)), y=alignPx(fpToPxY(s.y));
+      ctx.fillStyle=sensorColor;
+      ctx.strokeStyle=WALL_HANDLE_SHADOW;
+      ctx.lineWidth=hairline();
+      ctx.beginPath();
+      ctx.arc(x,y,sensorRadius,0,Math.PI*2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    });
+    if(floorplanTool==='sensor' && floorplanSensorHover){
+      ctx.save();
+      const x=alignPx(fpToPxX(floorplanSensorHover.x)), y=alignPx(fpToPxY(floorplanSensorHover.y));
+      ctx.fillStyle=sensorColor;
+      ctx.strokeStyle=WALL_HANDLE_SHADOW;
+      ctx.lineWidth=hairline();
+      ctx.beginPath();
+      ctx.arc(x,y,sensorRadius,0,Math.PI*2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    drawFloorplanHandles();
   }
 
   function makeFovPoints(range){
@@ -759,41 +1670,202 @@
     ctx.globalAlpha=1;
   }
 
-  function zoneStyle(key,active){
-    const isExcl=key==='excl';
-    if(active){
-      return isExcl
-        ? {fill:cssVar('--z-excl-fill'),stroke:cssVar('--z-excl'),width:2,fillAlpha:1}
-        : {fill:cssVar('--z-norm-fill'),stroke:cssVar('--z-norm'),width:2,fillAlpha:1};
+  function drawFloorplanPolylines(){
+    if(!floorplanPolylines.length) return;
+    const style=wallStyle();
+    ctx.save();
+    ctx.strokeStyle=style.stroke;
+    ctx.lineWidth=style.width;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.globalAlpha=0.9;
+    for(const line of floorplanPolylines){
+      if(!line || line.length<2) continue;
+      ctx.beginPath();
+      ctx.moveTo(alignPx(fpToPxX(line[0].x)), alignPx(fpToPxY(line[0].y)));
+      for(let i=1;i<line.length;i++){
+        ctx.lineTo(alignPx(fpToPxX(line[i].x)), alignPx(fpToPxY(line[i].y)));
+      }
+      ctx.stroke();
     }
-    return isExcl
-      ? {fill:cssVar('--z-excl-dim-fill'),stroke:cssVar('--z-excl-dim'),width:1.2,fillAlpha:1}
-      : {fill:cssVar('--z-norm-dim-fill'),stroke:cssVar('--z-norm-dim'),width:1.2,fillAlpha:1};
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
+  function drawFloorplanHandles(){
+    if(!floorplanEditEnabled) return;
+    const style = wallStyle();
+    ctx.save();
+    for(const line of floorplanPolylines){
+      if(!line) continue;
+      for(const p of line){
+        const x=alignPx(fpToPxX(p.x)), y=alignPx(fpToPxY(p.y));
+        ctx.beginPath();
+        ctx.arc(x,y,wallHandleRadius(),0,Math.PI*2);
+        ctx.fillStyle = style.stroke;
+        ctx.strokeStyle = WALL_HANDLE_SHADOW;
+        ctx.lineWidth = hairline();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    if(floorplanPreview){
+      ctx.beginPath();
+      ctx.arc(alignPx(fpToPxX(floorplanPreview.x)), alignPx(fpToPxY(floorplanPreview.y)), wallHandleRadius(), 0, Math.PI*2);
+      ctx.fillStyle = style.stroke;
+      ctx.strokeStyle = WALL_HANDLE_SHADOW;
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawFloorplanPreviewLine(){
+    if(!floorplanEditEnabled) return;
+    if(floorplanActiveLine===null) return;
+    const line=floorplanPolylines[floorplanActiveLine];
+    if(!line || !line.length || !floorplanPreview) return;
+    const last=line[line.length-1];
+    const dist=Math.hypot(floorplanPreview.x-last.x,floorplanPreview.y-last.y);
+    const labelVal = floorplanLengthInput ? Number(floorplanLengthInput) : dist;
+    const label=`${Math.round(labelVal)} cm`;
+    const style=wallStyle();
+    ctx.save();
+    ctx.strokeStyle=style.stroke;
+    ctx.lineWidth=style.width;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.globalAlpha=0.9;
+    const sx=alignPx(fpToPxX(last.x)), sy=alignPx(fpToPxY(last.y));
+    const ex=alignPx(fpToPxX(floorplanPreview.x)), ey=alignPx(fpToPxY(floorplanPreview.y));
+    const dx=ex-sx, dy=ey-sy;
+    const lenPx=Math.hypot(dx,dy)||1;
+    const ux=dx/lenPx, uy=dy/lenPx;
+    const isHoriz=Math.abs(dx)>=Math.abs(dy);
+
+    const ui=uiScale();
+    ctx.font=`bold ${12*ui}px system-ui`;
+    const metrics=ctx.measureText(label);
+    const pad=6*ui;
+    const textW=metrics.width+pad*2;
+    const textH=12*ui+pad*2;
+    const gapAlong=isHoriz ? textW : textW;
+    const gapHalf=gapAlong*0.5 + 4;
+    const midx=sx+dx*0.5, midy=sy+dy*0.5;
+
+    if(lenPx > gapAlong+8){
+      const cutSx=midx-ux*gapHalf, cutSy=midy-uy*gapHalf;
+      const cutEx=midx+ux*gapHalf, cutEy=midy+uy*gapHalf;
+      ctx.beginPath();
+      ctx.moveTo(sx,sy);
+      ctx.lineTo(cutSx,cutSy);
+      ctx.moveTo(cutEx,cutEy);
+      ctx.lineTo(ex,ey);
+      ctx.stroke();
+    }else{
+      ctx.beginPath();
+      ctx.moveTo(sx,sy);
+      ctx.lineTo(ex,ey);
+      ctx.stroke();
+    }
+
+    if(dist>0.05){
+      ctx.save();
+      ctx.translate(midx,midy);
+      if(!isHoriz){
+        ctx.rotate(-Math.PI/2);
+      }
+      ctx.textBaseline='middle';
+      ctx.textAlign='center';
+      ctx.fillStyle='#e6eaf1';
+      ctx.strokeStyle='rgba(0,0,0,0.55)';
+      ctx.lineWidth=3;
+      ctx.strokeText(label,0,0);
+      ctx.fillText(label,0,0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function zoneStyle(key,active){
+    const width = wallStrokeWidth();
+    const isExcl = key==='excl';
+    const strokeVar = isExcl
+      ? (active ? '--z-excl' : '--z-excl-dim')
+      : (active ? '--z-norm' : '--z-norm-dim');
+    const fillVar = isExcl
+      ? (active ? '--z-excl-fill' : '--z-excl-dim-fill')
+      : (active ? '--z-norm-fill' : '--z-norm-dim-fill');
+    return {
+      fill: cssVar(fillVar) || (isExcl ? cssVar('--z-excl-fill') : cssVar('--z-norm-fill')),
+      stroke: cssVar(strokeVar) || (isExcl ? cssVar('--z-excl') : cssVar('--z-norm')),
+      width,
+      fillAlpha:1
+    };
   }
 
   function targetRadius(){
-    return matchMedia('(max-width: 768px)').matches?5:6;
+    return wallHandleRadius();
+  }
+
+  function floorplanTargetRadius(){
+    return wallHandleRadius();
+  }
+
+  const T_JOIN_EPS = 0.75;
+  function pointOnSegmentInterior(pt,a,b,eps=T_JOIN_EPS){
+    const vx=b.x-a.x, vy=b.y-a.y;
+    const len2=vx*vx+vy*vy;
+    if(len2<1e-6) return false;
+    const proj=((pt.x-a.x)*vx+(pt.y-a.y)*vy)/len2;
+    if(proj<=eps/Math.sqrt(len2) || proj>=1-eps/Math.sqrt(len2)) return false;
+    const px=a.x+proj*vx, py=a.y+proj*vy;
+    const dist=Math.hypot(pt.x-px, pt.y-py);
+    return dist<=eps;
+  }
+
+  function floorplanNodeDegrees(){
+    const deg=new Map();
+    const key=(p)=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+    for(const line of floorplanPolylines){
+      if(!line || line.length<2) continue;
+      for(let i=0;i<line.length-1;i++){
+        const p0=line[i], p1=line[i+1];
+        const k0=key(p0), k1=key(p1);
+        deg.set(k0,(deg.get(k0)||0)+1);
+        deg.set(k1,(deg.get(k1)||0)+1);
+      }
+    }
+    return deg;
   }
 
   function drawHandles(pts){
     if(!pts || !pts.length) return;
-    const color=currentZone==='excl'?cssVar('--z-excl'):cssVar('--z-norm');
+    const isExcl=currentZone==='excl';
+    const color=isExcl?(cssVar('--z-excl')||WALL_COLOR):(cssVar('--z-norm')||WALL_COLOR);
+    const radius=wallHandleRadius();
+    ctx.save();
     for(let i=0;i<pts.length;i++){
-      const px=toPxX(pts[i].x), py=toPxY(pts[i].y);
+      const px=alignPx(toPxX(pts[i].x)), py=alignPx(toPxY(pts[i].y));
       ctx.beginPath();
-      ctx.arc(px,py,5.5,0,Math.PI*2);
-      ctx.fillStyle=i===dragIdx?'#22c55e':color;
+      ctx.arc(px,py,radius,0,Math.PI*2);
+      ctx.fillStyle=color;
+      ctx.strokeStyle=WALL_HANDLE_SHADOW;
+      ctx.lineWidth=hairline();
       ctx.fill();
+      ctx.stroke();
     }
+    ctx.restore();
   }
 
   function drawTargets(){
     if(viewDim !== '2d') return;
+    const live = livePosFor(selectedDevice?.device_id);
 
-    const color = cssVar('--pulse') || '#22c55e';
+    const color = WALL_COLOR;
     const r = targetRadius();
     for (const n of [1, 2, 3]) {
-      const p = livePos[n];
+      const p = live[n];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x === 0 && p.y === 0)) continue;
       const px = toPxX(clamp(p.x, X_MIN, X_MAX));
       const py = toPxY(clamp(p.y, Y_MIN, Y_MAX));
@@ -806,19 +1878,12 @@
 
   async function fetchHistoricalData(entityIds,hours=24){
     if(!selectedDevice) return [];
-    setStatus('',`Fetching ${hours}h data…`);
-    try{
-      const body=(entityIds&&entityIds.length)
-        ? {entity_ids:entityIds,hours}
-        : {device_id:selectedDevice.device_id,hours};
-      const res=await api('api/historical_targets',body);
-      const positions=res.positions||[];
-      setStatus('ok',`Loaded ${positions.length} positions`);
-      return positions;
-    }catch(e){
-      setStatus('err','Failed to fetch history: '+e.message);
-      return [];
-    }
+    const body=(entityIds&&entityIds.length)
+      ? {entity_ids:entityIds,hours}
+      : {device_id:selectedDevice.device_id,hours};
+    const res=await api('api/historical_targets',body);
+    const positions=res.positions||[];
+    return positions;
   }
 
   function buildPalette(){
@@ -1017,22 +2082,31 @@
       d[i*4+3] = Math.round(35 + (aMax-35)*t);
     }
 
+    const offscreen = document.createElement('canvas');
+    offscreen.width  = w;
+    offscreen.height = h;
+    const octx = offscreen.getContext('2d');
+    octx.imageSmoothingEnabled=false;
+    octx.putImageData(img,0,0);
+
+    const scaleX = baseScaleX() * cam2D.zoom;
+    const scaleY = baseScaleY() * cam2D.zoom;
+    const drawX = PAD + innerW()*0.5 + (X_MIN - cam2D.cx) * scaleX;
+    const drawY = PAD + innerH()*0.5 + (Y_MIN - cam2D.cy) * scaleY;
+    const drawW = WORLD_W * scaleX;
+    const drawH = WORLD_H * scaleY;
+
     ctx.save();
     const pts = makeFovPoints(detRange>0?detRange:MAX_RANGE);
     ctx.beginPath();
-    const sx = w/WORLD_W, sy = h/WORLD_H;
-    ctx.moveTo(PAD + (pts[0].x - X_MIN)*sx, PAD + (pts[0].y - Y_MIN)*sy);
+    ctx.moveTo(toPxX(pts[0].x), toPxY(pts[0].y));
     for(let i=1;i<pts.length;i++){
-      ctx.lineTo(PAD + (pts[i].x - X_MIN)*sx, PAD + (pts[i].y - Y_MIN)*sy);
+      ctx.lineTo(toPxX(pts[i].x), toPxY(pts[i].y));
     }
     ctx.closePath();
     ctx.clip();
 
-    const offscreen = document.createElement('canvas');
-    offscreen.width  = w;
-    offscreen.height = h;
-    offscreen.getContext('2d').putImageData(img,0,0);
-    ctx.drawImage(offscreen, PAD, PAD);
+    ctx.drawImage(offscreen, drawX, drawY, drawW, drawH);
     ctx.restore();
   }
 
@@ -1043,17 +2117,16 @@
     colorizeAndDrawField(cached.color, cached.w, cached.h);
   }
 
-  function updateCamera3D(){
+  function updateCamera3D(bounds=activeBounds()){
     const iw = innerW();
     const ih = innerH();
     cam3D.aspect = iw / ih;
 
-    const centerX = (X_MIN + X_MAX) * 0.5;
-    const centerZ = (Y_MIN + Y_MAX) * 0.5;
+    clampOrbitTarget(bounds);
 
-    cam3D.target.x = centerX;
+    cam3D.target.x = ORBIT_TARGET.x;
     cam3D.target.y = 0;
-    cam3D.target.z = centerZ;
+    cam3D.target.z = ORBIT_TARGET.z;
 
     ORBIT.distance  = clamp(ORBIT.distance,  ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
     ORBIT.elevation = clamp(ORBIT.elevation, ORBIT_LIMITS.minElev, ORBIT_LIMITS.maxElev);
@@ -1097,32 +2170,81 @@
     return {x:sx, y:sy, z:p.z};
   }
 
-  function drawGrid3D(){
+  function panOrbit(dx, dy){
+    updateCamera3D();
+    const speed = ORBIT.distance * ORBIT_PAN_SPEED;
+    const rightX = cam3D.cosA;
+    const rightZ = -cam3D.sinA;
+    const fwdX = cam3D.sinA;
+    const fwdZ = cam3D.cosA;
+
+    ORBIT_TARGET.x -= (dx * rightX + dy * fwdX) * speed;
+    ORBIT_TARGET.z -= (dx * rightZ + dy * fwdZ) * speed;
+    clampOrbitTarget(activeBounds());
+  }
+
+  function clipProjectSegment(wx0,wy0,wz0, wx1,wy1,wz1){
+    const c0 = worldToCamera(wx0,wy0,wz0);
+    const c1 = worldToCamera(wx1,wy1,wz1);
+    const near = cam3D.near;
+
+    const behind0 = c0.z <= near;
+    const behind1 = c1.z <= near;
+    if(behind0 && behind1) return null;
+
+    let p0 = c0, p1 = c1;
+    if(behind0 || behind1){
+      const dz = c1.z - c0.z;
+      if(Math.abs(dz) < 1e-6) return null;
+      const t = (near + 1e-4 - c0.z) / dz;
+      const clipPoint = {
+        x: c0.x + (c1.x - c0.x) * t,
+        y: c0.y + (c1.y - c0.y) * t,
+        z: near + 1e-4
+      };
+      if(behind0) p0 = clipPoint;
+      else p1 = clipPoint;
+    }
+
+    const s0 = {
+      x: cam3D.cx + (p0.x * cam3D.scale)/p0.z,
+      y: cam3D.cy - (p0.y * cam3D.scale)/p0.z,
+      z: p0.z
+    };
+    const s1 = {
+      x: cam3D.cx + (p1.x * cam3D.scale)/p1.z,
+      y: cam3D.cy - (p1.y * cam3D.scale)/p1.z,
+      z: p1.z
+    };
+    return {a:s0,b:s1};
+  }
+
+  function drawGrid3D(bounds=BASE_BOUNDS, step=GRID){
     const gridColor=cssVar('--grid')||'#1e2431';
     ctx.save();
-    ctx.lineWidth=1;
+    ctx.lineWidth=hairline();
     ctx.strokeStyle=gridColor;
-    ctx.globalAlpha=0.8;
+    ctx.globalAlpha=1;
 
-    const step = GRID;
-    const maxDepth = MAX_RANGE;
+    const zStart = bounds.yMin;
+    const zEnd   = bounds.yMax;
+    const xStart = bounds.xMin;
+    const xEnd   = bounds.xMax;
 
-    for(let x=Math.ceil(X_MIN/step)*step;x<=X_MAX;x+=step){
-      const p0 = project3D(x,0,0);
-      const p1 = project3D(x,0,maxDepth);
-      if(!p0 || !p1) continue;
+    for(let x=Math.ceil(xStart/step)*step;x<=xEnd;x+=step){
+      const seg = clipProjectSegment(x,0,zStart, x,0,zEnd);
+      if(!seg) continue;
       ctx.beginPath();
-      ctx.moveTo(p0.x,p0.y);
-      ctx.lineTo(p1.x,p1.y);
+      ctx.moveTo(alignPx(seg.a.x),alignPx(seg.a.y));
+      ctx.lineTo(alignPx(seg.b.x),alignPx(seg.b.y));
       ctx.stroke();
     }
-    for(let z=0; z<=maxDepth; z+=step){
-      const p0 = project3D(X_MIN,0,z);
-      const p1 = project3D(X_MAX,0,z);
-      if(!p0 || !p1) continue;
+    for(let z=Math.ceil(zStart/step)*step; z<=zEnd; z+=step){
+      const seg = clipProjectSegment(xStart,0,z, xEnd,0,z);
+      if(!seg) continue;
       ctx.beginPath();
-      ctx.moveTo(p0.x,p0.y);
-      ctx.lineTo(p1.x,p1.y);
+      ctx.moveTo(alignPx(seg.a.x),alignPx(seg.a.y));
+      ctx.lineTo(alignPx(seg.b.x),alignPx(seg.b.y));
       ctx.stroke();
     }
 
@@ -1168,6 +2290,390 @@
     ctx.globalAlpha=1;
     ctx.restore();
   }
+
+  function offsetPoints(base, origin){
+    if(!origin) return [];
+    return (base||[]).map(p=>({x:(p.x||0)+origin.x, y:(p.y||0)+origin.y}));
+  }
+
+  function rotatePoints(pts, angle){
+    if(!pts || !pts.length) return [];
+    const cosA=Math.cos(angle), sinA=Math.sin(angle);
+    return pts.map(p=>({
+      x:p.x*cosA - p.y*sinA,
+      y:p.x*sinA + p.y*cosA
+    }));
+  }
+
+  function sensorAtPx(px,py){
+    let bestIdx=-1, bestDist=Infinity;
+    floorplanSensors.forEach((s,i)=>{
+      const dx=fpToPxX(s.x)-px;
+      const dy=fpToPxY(s.y)-py;
+      const dist=Math.hypot(dx,dy);
+      if(dist<=FLOORPLAN_SENSOR_SNAP_PX && dist<bestDist){
+        bestIdx=i; bestDist=dist;
+      }
+    });
+    return bestIdx;
+  }
+
+  function sensorHandleWorld(sensor){
+    if(!sensor) return null;
+    const ang = sensorAngle(sensor);
+    const r = MAX_RANGE;
+    return {
+      x: sensor.x - Math.sin(ang)*r,
+      y: sensor.y + Math.cos(ang)*r,
+      r
+    };
+  }
+
+  function sensorLocalToWorld(pt, sensor){
+    if(!sensor || !pt) return {x:0,y:0};
+    const ang = sensorAngle(sensor);
+    const cosA=Math.cos(ang), sinA=Math.sin(ang);
+    return {
+      x: sensor.x + pt.x*cosA - pt.y*sinA,
+      y: sensor.y + pt.x*sinA + pt.y*cosA
+    };
+  }
+
+  function sensorWorldToLocal(world, sensor){
+    if(!sensor || !world) return {x:0,y:0};
+    const ang = sensorAngle(sensor);
+    const cosA=Math.cos(ang), sinA=Math.sin(ang);
+    const dx = world.x - sensor.x;
+    const dy = world.y - sensor.y;
+    return {
+      x: dx*cosA + dy*sinA,
+      y: -dx*sinA + dy*cosA
+    };
+  }
+
+  function syncActiveFloorplanSensorZones(){
+    const s = activeFloorplanSensor();
+    if(!s) return;
+    const idx = s.device_id
+      ? floorplanSensors.findIndex(x=>x.device_id===s.device_id)
+      : floorplanSensors.indexOf(s);
+    if(idx<0) return;
+    const updated = clampSensorPos({
+      ...floorplanSensors[idx],
+      zones: cloneZones(zones),
+      detRange: detRange
+    });
+    floorplanSensors[idx]=updated;
+  }
+
+
+  function sensorRotateHit(px,py){
+    let hitIdx=-1, angle=0;
+    floorplanSensors.forEach((s,i)=>{
+      const h=sensorHandleWorld(s);
+      if(!h) return;
+      const hx=fpToPxX(h.x), hy=fpToPxY(h.y);
+      const dist=Math.hypot(hx-px, hy-py);
+      if(dist<=FLOORPLAN_SENSOR_SNAP_PX){
+        hitIdx=i;
+        const dx = h.x - s.x;
+        const dy = h.y - s.y;
+        angle=Math.atan2(-dx, dy);
+      }
+    });
+    return {hitIdx,angle};
+  }
+
+  function activeFloorplanSensor(){
+    const devId = selectedDevice?.device_id;
+    if(devId){
+      const match = floorplanSensors.find(s=>s.device_id===devId);
+      if(match) return match;
+    }
+    return floorplanSensors[0] || null;
+  }
+
+  function floorplanSensorsForOverlay(){
+    return floorplanSensors;
+  }
+
+
+  function syncActiveSensorState(){
+    const devId=selectedDevice?.device_id;
+    if(!devId) return;
+    const idx=floorplanSensors.findIndex(s=>s.device_id===devId);
+    if(idx>=0){
+      floorplanSensors[idx]=clampSensorPos({
+        ...floorplanSensors[idx],
+        detRange,
+        zones: cloneZones(zones)
+      });
+    }
+  }
+
+  function drawFloorplanPoly2D(pts, style){
+    if(!pts || pts.length<2) return;
+    ctx.beginPath();
+    ctx.moveTo(fpToPxX(pts[0].x), fpToPxY(pts[0].y));
+    for(let i=1;i<pts.length;i++){
+      ctx.lineTo(fpToPxX(pts[i].x), fpToPxY(pts[i].y));
+    }
+    if(pts.length>=3) ctx.closePath();
+    if(style.fill){
+      ctx.globalAlpha=style.fillAlpha??1;
+      ctx.fillStyle=style.fill;
+      ctx.fill();
+    }
+    if(style.stroke){
+      ctx.globalAlpha=1;
+      ctx.lineWidth=style.width??2;
+      ctx.strokeStyle=style.stroke;
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  function drawSingleSensorOverlay2D(sensor){
+    if(!sensor) return;
+    const origin = {x:sensor.x,y:sensor.y};
+    const ang = sensorAngle(sensor);
+    const sDet = sensorDetRange(sensor);
+    const sZones = sensorZones(sensor);
+    const activeDeviceId = placementDevice()?.device_id || selectedDevice?.device_id || null;
+    const live = livePosFor(sensor.device_id);
+    const baseColor = cssVar('--fov');
+    const targetR = wallHandleRadius();
+    const maxPts = offsetPoints(rotatePoints(makeFovPoints(MAX_RANGE), ang), origin);
+    drawFloorplanPoly2D(maxPts,{fill:baseColor, stroke:null, fillAlpha:0.18});
+    if(sDet>0 && sDet<MAX_RANGE){
+      const detPts = offsetPoints(rotatePoints(makeFovPoints(sDet), ang), origin);
+      drawFloorplanPoly2D(detPts,{fill:baseColor, stroke:null, fillAlpha:0.10});
+    }
+    const isActiveSensor = activeDeviceId && sensor?.device_id === activeDeviceId;
+    for(const key of ['1','2','3','excl']){
+      const active = isActiveSensor && currentZone && key===currentZone;
+      const style=zoneStyle(key,active);
+      const pts=offsetPoints(rotatePoints(sZones[key], ang), origin);
+      drawFloorplanPoly2D(pts, style);
+    }
+    const color = WALL_COLOR;
+    const r = targetR;
+    for (const n of [1, 2, 3]) {
+      const p = live[n];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x === 0 && p.y === 0)) continue;
+      const rot = rotatePoints([{x:p.x,y:p.y}], ang)[0];
+      const wx = clamp(rot.x + origin.x, FLOORPLAN_BOUNDS.xMin, FLOORPLAN_BOUNDS.xMax);
+      const wy = clamp(rot.y + origin.y, FLOORPLAN_BOUNDS.yMin, FLOORPLAN_BOUNDS.yMax);
+      const px = fpToPxX(wx);
+      const py = fpToPxY(wy);
+      ctx.beginPath();
+      ctx.arc(px, py, targetR, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    if(activeDeviceId && sensor.device_id===activeDeviceId){
+      syncActiveSensorState();
+    }
+    if(floorplanTool==='zone' && activeDeviceId && sensor.device_id===activeDeviceId && currentZone){
+      const style = zoneStyle(currentZone,true);
+      const pts = offsetPoints(rotatePoints(sZones[currentZone], ang), origin);
+      const radius=wallHandleRadius();
+      ctx.save();
+      pts.forEach(p=>{
+        const px=alignPx(fpToPxX(p.x)), py=alignPx(fpToPxY(p.y));
+        ctx.beginPath();
+        ctx.arc(px,py,radius,0,Math.PI*2);
+        ctx.fillStyle=style.stroke;
+        ctx.strokeStyle=WALL_HANDLE_SHADOW;
+        ctx.lineWidth=hairline();
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+  }
+
+  function drawFloorplanSensorOverlay2D(){
+    const sensors = floorplanSensorsForOverlay();
+    if(!sensors.length) return;
+    sensors.forEach(drawSingleSensorOverlay2D);
+  }
+
+  function drawFloorplanSensorOverlay3D(){
+    const sensors = floorplanSensorsForOverlay();
+    if(!sensors.length) return;
+    for(const sensor of sensors){
+      const origin = {x:sensor.x, y:sensor.y};
+      const sDet = sensorDetRange(sensor);
+      drawFov3DAt(MAX_RANGE, origin, false, sensor);
+      if(sDet>0 && sDet<MAX_RANGE){
+        drawFov3DAt(sDet, origin, true, sensor);
+      }
+      drawFloorplanZones3D(origin, sensor);
+      drawFloorplanTargets3D(origin, sensor);
+    }
+  }
+
+  function drawFov3DAt(range, origin, lighter=false, sensor=null){
+    const r = Math.max(0, Math.min(MAX_RANGE, range|0));
+    if(!r || !origin) return;
+    const half = FOV_DEG/2;
+    const rad  = Math.PI/180;
+    const ang = sensorAngle(sensor);
+    const cosA=Math.cos(ang), sinA=Math.sin(ang);
+    const pts=[];
+    pts.push({x:origin.x,y:0,z:origin.y});
+    for(let a=-half; a<=half; a+=3){
+      const lx = r*Math.sin(a*rad);
+      const lz = r*Math.cos(a*rad);
+      const rx = lx*cosA - lz*sinA;
+      const rz = lx*sinA + lz*cosA;
+      pts.push({
+        x: origin.x + rx,
+        y: 0,
+        z: origin.y + rz
+      });
+    }
+    pts.push({x:origin.x,y:0,z:origin.y});
+
+    const baseColor = cssVar('--fov') || '#e6eaf1';
+    ctx.save();
+    ctx.beginPath();
+    let first=true;
+    for(const w of pts){
+      const p=project3D(w.x,w.y,w.z);
+      if(!p) continue;
+      if(first){ ctx.moveTo(p.x,p.y); first=false; }
+      else ctx.lineTo(p.x,p.y);
+    }
+    if(!first){
+      ctx.closePath();
+      ctx.globalAlpha=lighter?0.10:0.18;
+      ctx.fillStyle=baseColor;
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
+  function drawFloorplanZones3D(origin, sensor=null){
+    if(!origin) return;
+    const ang = sensorAngle(sensor);
+    const cosA=Math.cos(ang), sinA=Math.sin(ang);
+    const rotateLocal=(pts)=> (pts||[]).map(p=>{
+      const lx=p.x, lz=p.y;
+      return {x: lx*cosA - lz*sinA, y: lx*sinA + lz*cosA};
+    });
+    const activeDeviceId = placementDevice()?.device_id || selectedDevice?.device_id || null;
+    const isActiveSensor = activeDeviceId && sensor?.device_id === activeDeviceId;
+    const sZones = sensorZones(sensor);
+    const lines=[];
+    for(const key of ['1','2','3','excl']){
+      const pts = offsetPoints(rotateLocal(sZones[key]), origin);
+      if(!pts || pts.length<2) continue;
+      const active = isActiveSensor && currentZone && key===currentZone;
+      lines.push({pts, style: zoneStyle(key, active)});
+    }
+    renderWalls3D(lines, WALL_HEIGHT_CM, {closed:true, caps:true});
+  }
+
+  function drawFloorplanTargets3D(origin, sensor=null){
+    if(!origin) return;
+    const ang = sensorAngle(sensor);
+    const sensorCos=Math.cos(ang), sensorSin=Math.sin(ang);
+    const live = livePosFor(sensor?.device_id);
+    const faces = [];
+    const color = WALL_COLOR;
+    const SCALE = 1;
+
+    function pushFace(verts) {
+      const proj = verts.map(v => project3D(v.x, v.y, v.z));
+      if (proj.some(p => !p)) return;
+      const depth = proj.reduce((s, p) => s + p.z, 0) / proj.length;
+      faces.push({ proj, depth });
+    }
+
+    for (const n of [1, 2, 3]) {
+      const p = live[n];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      if (p.x === 0 && p.y === 0) continue;
+
+      const lx = p.x;
+      const lz = p.y;
+      const rx = lx*sensorCos - lz*sensorSin;
+      const rz = lx*sensorSin + lz*sensorCos;
+      const wx = clamp(rx + origin.x, FLOORPLAN_BOUNDS.xMin, FLOORPLAN_BOUNDS.xMax);
+      const wz = clamp(rz + origin.y, FLOORPLAN_BOUNDS.yMin, FLOORPLAN_BOUNDS.yMax);
+
+      let angleRad = (Number.isFinite(p.heading) ? p.heading : 0) + ang;
+      if(Number.isFinite(p.px) && Number.isFinite(p.py)){
+        const prx = p.px*sensorCos - p.py*sensorSin;
+        const prz = p.px*sensorSin + p.py*sensorCos;
+        const dx = rx - prx;
+        const dz = rz - prz;
+        if(Math.hypot(dx,dz)>1e-3){
+          angleRad = Math.atan2(dx,dz);
+        }
+      }
+      const headingCos = Math.cos(angleRad);
+      const headingSin = Math.sin(angleRad);
+
+      for (const tri of HUMAN_TRIANGLES) {
+        const v0 = tri[0];
+        const v1 = tri[1];
+        const v2 = tri[2];
+
+        function transform(v) {
+          const lx = v.x * SCALE;
+          const ly = v.y * SCALE;
+          const lz = v.z * SCALE;
+
+          const rx = lx * headingCos + lz * headingSin;
+          const rz = -lx * headingSin + lz * headingCos;
+
+          return {
+            x: wx + rx,
+            y: ly,
+            z: wz + rz
+          };
+        }
+
+        const verts = [transform(v0), transform(v1), transform(v2)];
+        pushFace(verts);
+      }
+    }
+
+    faces.sort((a, b) => b.depth - a.depth);
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle   = color;
+
+    for (const f of faces) {
+      ctx.beginPath();
+      ctx.moveTo(f.proj[0].x, f.proj[0].y);
+      for (let i = 1; i < f.proj.length; i++) {
+        ctx.lineTo(f.proj[i].x, f.proj[i].y);
+      }
+      ctx.closePath();
+
+      ctx.globalAlpha = 0.20;
+      ctx.fill();
+
+      ctx.globalAlpha = 0.4;
+      ctx.lineWidth   = 0.25;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    if(sensor?.device_id===selectedDevice?.device_id){
+      syncActiveSensorState();
+    }
+  }
+
 
   function softFovFactor(x,z,range){
     const r = Math.hypot(x,z);
@@ -1337,78 +2843,125 @@
     ctx.restore();
   }
 
-  function drawZones3D(){
-    const wallH = WALL_HEIGHT_CM;
-    const walls = [];
+  function renderWalls3D(lines, wallH, {closed=false,caps=false}={}){
+    if(!lines || !lines.length) return;
+    const walls=[];
+    const segments=[];
+    const nodeKey=(p)=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+    const deg=new Map();
 
     ctx.save();
-    for(const key of ['1','2','3','excl']){
-      const pts = zones[key];
+    ctx.lineJoin='miter';
+    ctx.lineCap='butt';
+    ctx.miterLimit=2;
+
+    if(caps){
+      for(const {pts,style} of lines){
+        if(!pts || pts.length<2) continue;
+        ctx.beginPath();
+        let first=true;
+        for(const pt of pts){
+          const p=project3D(pt.x,0,pt.y);
+          if(!p) continue;
+          if(first){ctx.moveTo(p.x,p.y); first=false;}
+          else ctx.lineTo(p.x,p.y);
+        }
+        if(!first && closed && pts.length>=3) ctx.closePath();
+        if(style?.fill){
+          ctx.globalAlpha=(style.fillAlpha ?? 1)*0.9;
+          ctx.fillStyle=style.fill;
+          ctx.fill();
+        }
+        if(style?.stroke){
+          ctx.globalAlpha=1;
+          ctx.lineWidth=style.width ?? 2;
+          ctx.strokeStyle=style.stroke;
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha=1;
+    }
+
+    for(const {pts} of lines){
       if(!pts || pts.length<2) continue;
-      const active = currentZone && key===currentZone;
-      const style = zoneStyle(key, active);
-
-      ctx.beginPath();
-      let first = true;
-      for(const pt of pts){
-        const p = project3D(pt.x,0,pt.y);
-        if(!p) continue;
-        if(first){ ctx.moveTo(p.x,p.y); first=false; }
-        else ctx.lineTo(p.x,p.y);
-      }
-      if(!first && pts.length>=3) ctx.closePath();
-
-      if(style.fill){
-        ctx.globalAlpha = (style.fillAlpha ?? 1) * 0.9;
-        ctx.fillStyle   = style.fill;
-        ctx.fill();
-      }
-      if(style.stroke){
-        ctx.globalAlpha = 1;
-        ctx.lineWidth   = style.width ?? 2;
-        ctx.strokeStyle = style.stroke;
-        ctx.stroke();
-      }
-
-      const n = pts.length;
-      for(let i=0;i<n;i++){
+      const n=pts.length;
+      const limit=closed ? n : n-1;
+      for(let i=0;i<limit;i++){
         const j=(i+1)%n;
-        const p0=pts[i], p1=pts[j];
-        const b0 = project3D(p0.x,0,p0.y);
-        const b1 = project3D(p1.x,0,p1.y);
-        const t0 = project3D(p0.x,wallH,p0.y);
-        const t1 = project3D(p1.x,wallH,p1.y);
-        if(!b0 || !b1 || !t0 || !t1) continue;
-        const depth = (b0.z + b1.z + t0.z + t1.z)/4;
-        walls.push({b0,b1,t0,t1,style,depth});
+        const k0=nodeKey(pts[i]);
+        const k1=nodeKey(pts[j]);
+        deg.set(k0,(deg.get(k0)||0)+1);
+        deg.set(k1,(deg.get(k1)||0)+1);
       }
     }
+
+    for(const {pts,style} of lines){
+      if(!pts || pts.length<2 || !style) continue;
+      const n=pts.length;
+      const limit=closed ? n : n-1;
+      for(let i=0;i<limit;i++){
+        const j=(i+1)%n;
+        const p0=pts[i], p1=pts[j];
+        const b0=project3D(p0.x,0,p0.y);
+        const b1=project3D(p1.x,0,p1.y);
+        const t0=project3D(p0.x,wallH,p0.y);
+        const t1=project3D(p1.x,wallH,p1.y);
+        if(!b0 || !b1 || !t0 || !t1) continue;
+        const segIdx=segments.length;
+        segments.push({p0,p1,segIdx});
+        const depth=(b0.z + b1.z + t0.z + t1.z)/4;
+        const d0=deg.get(nodeKey(p0))||0;
+        const d1=deg.get(nodeKey(p1))||0;
+        walls.push({b0,b1,t0,t1,style,depth,p0,p1,drawV0:d0<=2,drawV1:d1<=2,segIdx});
+      }
+    }
+
+    const touchesOtherInterior=(pt,skipSegIdx)=>{
+      for(const seg of segments){
+        if(seg.segIdx===skipSegIdx) continue;
+        if(pointOnSegmentInterior(pt, seg.p0, seg.p1)) return true;
+      }
+      return false;
+    };
 
     walls.sort((a,b)=>b.depth - a.depth);
     for(const w of walls){
       const style=w.style;
       if(style.fill){
-        ctx.globalAlpha = (style.fillAlpha ?? 1) * 0.9;
         ctx.beginPath();
         ctx.moveTo(w.b0.x,w.b0.y);
         ctx.lineTo(w.b1.x,w.b1.y);
         ctx.lineTo(w.t1.x,w.t1.y);
         ctx.lineTo(w.t0.x,w.t0.y);
         ctx.closePath();
-        ctx.fillStyle = style.fill;
+        ctx.fillStyle=style.fill;
+        ctx.globalAlpha=(style.fillAlpha ?? 1)*0.45;
         ctx.fill();
       }
       if(style.stroke){
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha=0.9;
+        ctx.lineWidth=style.width ?? 2;
+        ctx.strokeStyle=style.stroke;
         ctx.beginPath();
         ctx.moveTo(w.b0.x,w.b0.y);
         ctx.lineTo(w.b1.x,w.b1.y);
-        ctx.lineTo(w.t1.x,w.t1.y);
-        ctx.lineTo(w.t0.x,w.t0.y);
-        ctx.closePath();
-        ctx.strokeStyle = style.stroke;
-        ctx.lineWidth = (style.width ?? 2) * 0.7;
         ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(w.t0.x,w.t0.y);
+        ctx.lineTo(w.t1.x,w.t1.y);
+        ctx.stroke();
+        if(w.drawV0 && !touchesOtherInterior(w.p0, w.segIdx)){
+          ctx.beginPath();
+          ctx.moveTo(w.b0.x,w.b0.y);
+          ctx.lineTo(w.t0.x,w.t0.y);
+          ctx.stroke();
+        }
+        if(w.drawV1 && !touchesOtherInterior(w.p1, w.segIdx)){
+          ctx.beginPath();
+          ctx.moveTo(w.b1.x,w.b1.y);
+          ctx.lineTo(w.t1.x,w.t1.y);
+          ctx.stroke();
+        }
       }
     }
 
@@ -1416,7 +2969,29 @@
     ctx.restore();
   }
 
-const HUMAN_TRIANGLES = [
+  function drawZones3D(){
+    const wallH = WALL_HEIGHT_CM;
+    const lines=[];
+    for(const key of ['1','2','3','excl']){
+      const pts=zones[key];
+      if(!pts || pts.length<2) continue;
+      const active=currentZone && key===currentZone;
+      lines.push({pts, style: zoneStyle(key, active)});
+    }
+    renderWalls3D(lines, wallH, {closed:true, caps:true});
+  }
+
+  function drawFloorplanWalls3D(){
+    if(!floorplanPolylines.length) return;
+    const wallH = FLOORPLAN_WALL_HEIGHT_CM;
+    const style = wallStyle();
+    const lines = floorplanPolylines
+      .filter(line => line && line.length>=2)
+      .map(pts => ({pts, style}));
+    renderWalls3D(lines, wallH, {closed:false, caps:false});
+  }
+
+HUMAN_TRIANGLES = [
   [{x:-7.61, y:172.57, z:-8.41}, {x:-7.9, y:165.93, z:-4.32}, {x:-2.67, y:161.54, z:-10.64}],
   [{x:-13.86, y:0.0, z:12.08}, {x:-16.48, y:2.9, z:10.58}, {x:-13.78, y:4.9, z:3.64}],
   [{x:-21.86, y:0.0, z:9.58}, {x:-16.48, y:2.9, z:10.58}, {x:-13.86, y:0.0, z:12.08}],
@@ -1744,9 +3319,10 @@ const HUMAN_TRIANGLES = [
   function drawTargets3D() {
     if (viewDim !== '3d') return;
     if (!HUMAN_TRIANGLES.length) return;
+    const live = livePosFor(selectedDevice?.device_id);
 
     const faces = [];
-    const color = cssVar('--pulse') || '#22c55e';
+    const color = WALL_COLOR;
     const SCALE = 1;
 
     function pushFace(verts) {
@@ -1757,7 +3333,7 @@ const HUMAN_TRIANGLES = [
     }
 
     for (const n of [1, 2, 3]) {
-      const p = livePos[n];
+      const p = live[n];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
       if (p.x === 0 && p.y === 0) continue;
 
@@ -1811,31 +3387,40 @@ const HUMAN_TRIANGLES = [
       ctx.fill();
 
       ctx.globalAlpha = 0.4;
-      ctx.lineWidth   = 0.5;
+      ctx.lineWidth   = 0.25;
       ctx.stroke();
     }
 
     ctx.restore();
   }
 
+  function drawFloorplan3D(){
+    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
+    updateCamera3D(FLOORPLAN_BOUNDS);
+    drawGrid3D(FLOORPLAN_BOUNDS, GRID);
+    drawFloorplanWalls3D();
+    drawFloorplanSensorOverlay3D();
+  }
+
   function drawScene3D(){
-  ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
-  updateCamera3D();
-  drawGrid3D();
-  drawFov3D(MAX_RANGE,false);
-  if(detRange>0 && detRange<MAX_RANGE){
-    drawFov3D(detRange,true);
-  }
-  if(viewMode === 'heatmap'){
-    drawHeatmap3D();
-  }
-  drawZones3D();
-  drawTargets3D();
+    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
+    updateCamera3D();
+    drawGrid3D();
+    drawFov3D(MAX_RANGE,false);
+    if(detRange>0 && detRange<MAX_RANGE){
+      drawFov3D(detRange,true);
+    }
+    if(viewMode === 'heatmap'){
+      drawHeatmap3D();
+    }
+    drawZones3D();
+    drawTargets3D();
   }
 
   let drawQueued=false;
   function enqueueDraw(){
     if(drawQueued) return;
+    syncActiveSensorState();
     drawQueued=true;
     requestAnimationFrame(()=>{ drawQueued=false; draw(); });
   }
@@ -1843,7 +3428,10 @@ const HUMAN_TRIANGLES = [
   function draw(){
     ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
 
-    if(viewDim === '3d'){
+    if(floorplanEnabled){
+      if(viewDim === '3d') drawFloorplan3D();
+      else drawFloorplan2DView();
+    } else if(viewDim === '3d'){
       drawScene3D();
     } else {
       drawGrid();
@@ -1864,10 +3452,22 @@ const HUMAN_TRIANGLES = [
       drawTargets();
     }
 
-    const showLegend = (viewMode === 'heatmap');
+    const showLegend = (!floorplanEnabled && viewMode === 'heatmap');
     legend.style.display = showLegend ? 'flex' : 'none';
+    if(floorplanTools){
+      const showTools = floorplanEnabled && viewDim === '2d' && !IS_MOBILE;
+      floorplanTools.style.display = showTools ? 'flex' : 'none';
+    }
+    if(floorplanHistoryBar){
+      const showHistory = floorplanEnabled && viewDim === '2d' && !IS_MOBILE;
+      floorplanHistoryBar.style.display = showHistory ? 'flex' : 'none';
+    }
     if(viewToggle){
       viewToggle.style.display = 'flex';
+    }
+    if(floorplanBtn){
+      floorplanBtn.classList.toggle('active',floorplanEnabled);
+      floorplanBtn.setAttribute('aria-pressed', floorplanEnabled ? 'true' : 'false');
     }
 
     viewToggleBtns.forEach(btn=>{
@@ -1875,17 +3475,20 @@ const HUMAN_TRIANGLES = [
       const active = (v === viewDim);
       btn.classList.toggle('active',active);
     });
-  }   
-
-  let dragIdx=null, dragWhole=false, lastPX=0, lastPY=0;
-
-  function localPoint(clientX,clientY){
-    const r=cvs.getBoundingClientRect();
-    const sx=(cvs.width/dpr)/r.width, sy=(cvs.height/dpr)/r.height;
-    return {x:(clientX-r.left)*sx,y:(clientY-r.top)*sy};
   }
 
-    function nearestIdx(px,py){
+  let dragIdx=null, dragWhole=false, lastPX=0, lastPY=0;
+  const pointerPos={x:0,y:0};
+
+  function localPoint(clientX,clientY,out=pointerPos){
+    const r=cvs.getBoundingClientRect();
+    const sx=(cvs.width/dpr)/r.width, sy=(cvs.height/dpr)/r.height;
+    out.x=(clientX-r.left)*sx;
+    out.y=(clientY-r.top)*sy;
+    return out;
+  }
+
+  function nearestIdx(px,py){
     if(!currentZone) return -1;
     const pts=zones[currentZone];
     if(!pts) return -1;
@@ -1951,19 +3554,724 @@ const HUMAN_TRIANGLES = [
     }
     return null;
   }
+
+  const FLOORPLAN_SNAP_PX = 14;
+  const FLOORPLAN_SENSOR_SNAP_PX = 12;
+  const FLOORPLAN_HEIGHT_SNAP_PX = 10;
+  const FLOORPLAN_WIDTH_SNAP_PX = 10;
+
+  function floorplanWorldPointFromPx(px,py){
+    return {
+      x:clamp(fpFromPxX(px),FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax),
+      y:clamp(fpFromPxY(py),FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax)
+    };
+  }
+
+  function floorplanLocalFromPx(px,py,sensor){
+    const world=floorplanWorldPointFromPx(px,py);
+    return sensorWorldToLocal(world, sensor);
+  }
+
+  function floorplanNearestIdx(px,py,sensor){
+    if(!currentZone || !sensor) return -1;
+    const pts=zones[currentZone];
+    if(!pts) return -1;
+    let best=-1,dmin=14;
+    for(let i=0;i<pts.length;i++){
+      const w=sensorLocalToWorld(pts[i], sensor);
+      const dx=fpToPxX(w.x)-px;
+      const dy=fpToPxY(w.y)-py;
+      const d=Math.hypot(dx,dy);
+      if(d<dmin){
+        dmin=d;
+        best=i;
+      }
+    }
+    return best;
+  }
+
+  function floorplanNearestEdge(px,py,sensor){
+    if(!currentZone || !sensor) return {idx:-1,dist:Infinity};
+    const pts=zones[currentZone];
+    if(!pts || pts.length<2) return {idx:-1,dist:Infinity};
+    let bestIdx=-1;
+    let dmin=10;
+    for(let i=0;i<pts.length;i++){
+      const j=(i+1)%pts.length;
+      const a=sensorLocalToWorld(pts[i], sensor);
+      const b=sensorLocalToWorld(pts[j], sensor);
+      const ax=fpToPxX(a.x), ay=fpToPxY(a.y);
+      const bx=fpToPxX(b.x), by=fpToPxY(b.y);
+      const d=distToSegment(px,py,ax,ay,bx,by);
+      if(d<dmin){
+        dmin=d;
+        bestIdx=i;
+      }
+    }
+    return {idx:bestIdx,dist:dmin};
+  }
+
+  function floorplanPointInPoly(pts,px,py,sensor){
+    if(!pts||pts.length<3||!sensor) return false;
+    const world=floorplanWorldPointFromPx(px,py);
+    const p=sensorWorldToLocal(world, sensor);
+    let inside=false;
+    for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+      const xi=pts[i].x, yi=pts[i].y, xj=pts[j].x, yj=pts[j].y;
+      const intersect=((yi>p.y)!==(yj>p.y))&&(p.x< (xj-xi)*(p.y-yi)/(yj-yi+1e-9)+xi);
+      if(intersect) inside=!inside;
+    }
+    return inside;
+  }
+
+  function floorplanHitZoneAt(px,py,sensor){
+    const order=[currentZone,'1','2','3','excl'].filter((v,i,self)=>self.indexOf(v)===i);
+    for(const z of order){
+      const pts=zones[z];
+      if(floorplanPointInPoly(pts,px,py,sensor)) return z;
+    }
+    return null;
+  }
+
+  function closestPointOnSegmentPx(px,py,ax,ay,bx,by){
+    const vx=bx-ax, vy=by-ay;
+    const wx=px-ax, wy=py-ay;
+    const c2=vx*vx+vy*vy;
+    if(c2<=1e-6){
+      const dist=Math.hypot(px-ax,py-ay);
+      return {px:ax,py:ay,dist};
+    }
+    const t=clamp((wx*vx+wy*vy)/c2,0,1);
+    const projx=ax+t*vx, projy=ay+t*vy;
+    return {px:projx,py:projy,dist:Math.hypot(px-projx,py-projy)};
+  }
+
+  function snapToFloorplan(px,py){
+    let best=null;
+    const consider=(x,y,dist,type)=>{
+      if(dist>FLOORPLAN_SNAP_PX) return;
+      if(!best || dist<best.dist){
+        best={x,y,dist,type};
+      }
+    };
+
+    for(const line of floorplanPolylines){
+      if(!line) continue;
+      for(const p of line){
+        const dist=Math.hypot(fpToPxX(p.x)-px, fpToPxY(p.y)-py);
+        consider(p.x,p.y,dist,'vertex');
+      }
+    }
+
+    for(const line of floorplanPolylines){
+      if(!line || line.length<2) continue;
+      for(let i=0;i<line.length-1;i++){
+        const a=line[i], b=line[i+1];
+        const proj=closestPointOnSegmentPx(px,py, fpToPxX(a.x),fpToPxY(a.y), fpToPxX(b.x),fpToPxY(b.y));
+        consider(fpFromPxX(proj.px), fpFromPxY(proj.py), proj.dist,'edge');
+      }
+    }
+    return best;
+  }
+
+  function applyHeightSnap(world, px, py){
+    let bestY=null, bestDist=FLOORPLAN_HEIGHT_SNAP_PX;
+    for(const line of floorplanPolylines){
+      if(!line) continue;
+      for(const p of line){
+        const dyPx=Math.abs(fpToPxY(p.y)-py);
+        if(dyPx<=bestDist){
+          bestDist=dyPx;
+          bestY=p.y;
+        }
+      }
+    }
+    if(bestY!==null){
+      return {world:{x:world.x,y:bestY}, snapLineY:bestY};
+    }
+    return {world, snapLineY:null};
+  }
+
+  function applyWidthSnap(world, px, py){
+    let bestX=null, bestDist=FLOORPLAN_WIDTH_SNAP_PX;
+    for(const line of floorplanPolylines){
+      if(!line) continue;
+      for(const p of line){
+        const dxPx=Math.abs(fpToPxX(p.x)-px);
+        if(dxPx<=bestDist){
+          bestDist=dxPx;
+          bestX=p.x;
+        }
+      }
+    }
+    if(bestX!==null){
+      return {world:{x:bestX,y:world.y}, snapLineX:bestX};
+    }
+    return {world, snapLineX:null};
+  }
+
+  function floorplanFindVertex(px,py){
+    let best={line:-1,idx:-1,dist:Infinity};
+    for(let li=0;li<floorplanPolylines.length;li++){
+      const line=floorplanPolylines[li];
+      if(!line) continue;
+      for(let pi=0;pi<line.length;pi++){
+        const d=Math.hypot(fpToPxX(line[pi].x)-px, fpToPxY(line[pi].y)-py);
+        if(d<best.dist){
+          best={line:li,idx:pi,dist:d};
+        }
+      }
+    }
+    return best;
+  }
+
+  function applyAxisSnap(world,lastWorld,_shiftKey){
+    return world;
+  }
+
+  function sensorWorldFromPx(px,py){
+    const snap = snapToFloorplan(px,py);
+    if(snap) return {world:{x:snap.x,y:snap.y}, snapped:true};
+    return {world:floorplanWorldPointFromPx(px,py), snapped:false};
+  }
+
+  function handleFloorplanSelectDown(px,py,shiftKey=false, button=0){
+    const snapRes=sensorWorldFromPx(px,py);
+    const world=snapRes.world;
+
+    const rotHit = sensorRotateHit(px,py);
+    if(button===0 && rotHit.hitIdx>=0){
+      pushFloorplanHistory();
+      floorplanSensorRotating=rotHit.hitIdx;
+      floorplanDragMode='rotate';
+      floorplanSensors[rotHit.hitIdx].angle=rotHit.angle;
+      const h=sensorHandleWorld(floorplanSensors[rotHit.hitIdx]);
+      floorplanSensorHover = h ? {x:h.x,y:h.y} : null;
+      selectSensorContext(floorplanSensors[rotHit.hitIdx]);
+      enqueueDraw();
+      return;
+    }
+    const hitIdx = sensorAtPx(px,py);
+    if(button===0 && hitIdx>=0){
+      pushFloorplanHistory();
+      floorplanSensorDragging=hitIdx;
+      floorplanSensorHover=null;
+      selectSensorContext(floorplanSensors[hitIdx]);
+      enqueueDraw();
+      return;
+    }
+
+    if(floorplanTool==='sensor'){
+      if(button===2 && hitIdx>=0){
+        pushFloorplanHistory();
+        floorplanSensors.splice(hitIdx,1);
+        enqueueDraw();
+        return;
+      }
+      if(button===0){
+        const dev = placementDevice();
+        if(!dev){
+          setError('Sensor placement failed');
+          return;
+        }
+        pushFloorplanHistory();
+        const existingIdx = floorplanSensors.findIndex(s=>s.device_id===dev.device_id);
+        const newSensor = clampSensorPos(makeSensor(world.x,world.y,dev));
+        if(existingIdx>=0){
+          floorplanSensors[existingIdx]=newSensor;
+        }else{
+          floorplanSensors.push(newSensor);
+        }
+        floorplanSensorHover=null;
+        setReady();
+        enqueueDraw();
+        return;
+      }
+    }
+
+  }
+
+  function handleFloorplanZoneDown(px,py,shiftKey=false,button=0){
+    const sensor = activeFloorplanSensor();
+    if(!sensor){
+      setError('Zone is not valid');
+      return;
+    }
+    if(!zones[currentZone]) zones[currentZone]=[];
+    const pts = zones[currentZone];
+    floorplanZoneLastPX=px;
+    floorplanZoneLastPY=py;
+
+    if(button===2){
+      const idx=floorplanNearestIdx(px,py,sensor);
+      if(idx>=0){
+        pushFloorplanHistory();
+        pts.splice(idx,1);
+        floorplanZoneDragIdx=null;
+        floorplanZoneDragWhole=false;
+        syncActiveFloorplanSensorZones();
+        enqueueDraw();
+      }
+      return;
+    }
+
+    const idx=floorplanNearestIdx(px,py,sensor);
+    if(idx>=0){
+      floorplanZoneDragIdx=idx;
+      pushFloorplanHistory();
+      enqueueDraw();
+      return;
+    }
+
+    if(pts.length>=2 && pts.length<MAX_POINTS){
+      const edge=floorplanNearestEdge(px,py,sensor);
+      if(edge.idx>=0){
+        const local=floorplanLocalFromPx(px,py,sensor);
+        const p={
+          x:Math.round(clamp(local.x,X_MIN,X_MAX)),
+          y:Math.round(clamp(local.y,Y_MIN,Y_MAX))
+        };
+        const insertAt=edge.idx+1;
+        pushFloorplanHistory();
+        pts.splice(insertAt,0,p);
+        floorplanZoneDragIdx=insertAt;
+        syncActiveFloorplanSensorZones();
+        enqueueDraw();
+        return;
+      }
+    }
+
+    const hit=floorplanHitZoneAt(px,py,sensor);
+    if(hit){
+      if(hit!==currentZone){
+        setCurrentZone(hit);
+      }
+      floorplanZoneDragWhole=true;
+      floorplanZoneDragIdx=null;
+      return;
+    }
+
+    if(pts.length>=MAX_POINTS) return;
+    const local=floorplanLocalFromPx(px,py,sensor);
+    const wasEmpty = pts.length === 0;
+    pts.push({
+      x:Math.round(clamp(local.x,X_MIN,X_MAX)),
+      y:Math.round(clamp(local.y,Y_MIN,Y_MAX))
+    });
+    pushFloorplanHistory();
+    syncActiveFloorplanSensorZones();
+    if(wasEmpty) setReady();
+    enqueueDraw();
+  }
+
+  function handleFloorplanSelectMove(px,py){
+    const snapRes=sensorWorldFromPx(px,py);
+    const world=snapRes.world;
+
+    if(floorplanSensorRotating!==null){
+      const s=floorplanSensors[floorplanSensorRotating];
+      if(s){
+        const dx = world.x - s.x;
+        const dy = world.y - s.y;
+        s.angle = Math.atan2(-dx, dy);
+        const h = sensorHandleWorld(s);
+        floorplanSensorHover = h ? {x:h.x,y:h.y} : null;
+      }
+      enqueueDraw();
+      return;
+    }
+
+    if(floorplanSensorDragging!==null && floorplanSensors[floorplanSensorDragging]){
+      floorplanSensors[floorplanSensorDragging].x=world.x;
+      floorplanSensors[floorplanSensorDragging].y=world.y;
+      floorplanSensorHover=null;
+      selectSensorContext(floorplanSensors[floorplanSensorDragging]);
+      enqueueDraw();
+      return;
+    }
+
+    if(floorplanTool==='sensor'){
+      const devId = placementDevice()?.device_id;
+      const hasSensor = devId && floorplanSensors.some(s=>s.device_id===devId);
+      floorplanSensorHover = hasSensor ? null : world;
+      enqueueDraw();
+    }
+  }
+
+  function handleFloorplanZoneMove(px,py){
+    const sensor=activeFloorplanSensor();
+    if(!sensor || !currentZone) return;
+    const pts=zones[currentZone];
+    if(!pts) return;
+
+    if(floorplanZoneDragWhole){
+      const curr=floorplanLocalFromPx(px,py,sensor);
+      const prev=floorplanLocalFromPx(floorplanZoneLastPX,floorplanZoneLastPY,sensor);
+      const dx=curr.x - prev.x;
+      const dy=curr.y - prev.y;
+      let canMove=true;
+      for(const p of pts){
+        const nx=clamp(p.x+dx,X_MIN,X_MAX);
+        const ny=clamp(p.y+dy,Y_MIN,Y_MAX);
+        if(nx!==p.x+dx || ny!==p.y+dy){ canMove=false; break; }
+      }
+      if(canMove){
+        for(let i=0;i<pts.length;i++){
+          pts[i]={x:pts[i].x+dx,y:pts[i].y+dy};
+        }
+        floorplanZoneLastPX=px;
+        floorplanZoneLastPY=py;
+        syncActiveFloorplanSensorZones();
+        enqueueDraw();
+      }
+      return;
+    }
+
+    if(floorplanZoneDragIdx!=null){
+      const local=floorplanLocalFromPx(px,py,sensor);
+      pts[floorplanZoneDragIdx]={
+        x:Math.round(clamp(local.x,X_MIN,X_MAX)),
+        y:Math.round(clamp(local.y,Y_MIN,Y_MAX))
+      };
+      syncActiveFloorplanSensorZones();
+      enqueueDraw();
+    }
+  }
+
+  function finishFloorplanInteraction(){
+    if(floorplanSensorRotating!==null){
+      floorplanSensorRotating=null;
+    }
+    if(floorplanSensorDragging!==null){
+      floorplanSensorDragging=null;
+    }
+    if(floorplanZoneDragIdx!==null || floorplanZoneDragWhole){
+      syncActiveFloorplanSensorZones();
+    }
+    floorplanZoneDragIdx=null;
+    floorplanZoneDragWhole=false;
+    floorplanDragMode=null;
+    floorplanSensorHover=null;
+    applyFloorplanAutoFitIfDirty();
+    enqueueDraw();
+  }
+
+  function normalizePolyline(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.map(p=>({
+      x:clamp(Number(p.x)||0,FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax),
+      y:clamp(Number(p.y)||0,FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax)
+    })).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
+  }
+
+  function snapshotFloorplan(){
+    return {
+      polylines: floorplanPolylines.map(l=>l.map(p=>({...p}))),
+      sensors: floorplanSensors.map(s=>({
+        ...s,
+        zones: cloneZones(s.zones||zones)
+      }))
+    };
+  }
+
+  function restoreFloorplan(state){
+    floorplanPolylines = (state?.polylines||[]).map(normalizePolyline).filter(l=>l.length);
+    floorplanSensors = (state?.sensors||[]).map(clampSensorPos);
+  }
+
+  function pushFloorplanHistory(){
+    floorplanHistory.push(snapshotFloorplan());
+    if(floorplanHistory.length>50) floorplanHistory.shift();
+    floorplanFuture=[];
+  }
+
+  function undoFloorplan(){
+    if(!floorplanHistory.length){
+      return;
+    }
+    const current=snapshotFloorplan();
+    const prev=floorplanHistory.pop();
+    floorplanFuture.push(current);
+    restoreFloorplan(prev);
+    applyFloorplanAutoFit();
+    setReady();
+    const active = activeFloorplanSensor();
+    if(active) adoptZonesFromSensor(active);
+    else enqueueDraw();
+  }
+
+  function redoFloorplan(){
+    if(!floorplanFuture.length){
+      return;
+    }
+    const current=snapshotFloorplan();
+    const next=floorplanFuture.pop();
+    floorplanHistory.push(current);
+    restoreFloorplan(next);
+    applyFloorplanAutoFit();
+    setReady();
+    const active = activeFloorplanSensor();
+    if(active) adoptZonesFromSensor(active);
+    else enqueueDraw();
+  }
+
+  async function loadFloorplanFromHA(){
+    floorplanPolylines=[];
+    floorplanActiveLine=null;
+    floorplanPreview=null;
+    floorplanSensors=[];
+    floorplanSensorHover=null;
+    floorplanSensorDragging=null;
+    floorplanSensorRotating=null;
+    floorplanHistory=[];
+    floorplanFuture=[];
+    resetFPCam();
+    if(!selectedFloorId) return false;
+    try{
+      const r = await fetch(`api/floorplan?floor_id=${encodeURIComponent(selectedFloorId)}`,{
+        method:'GET',
+        credentials:'include'
+      });
+      const text=await r.text();
+      if(!r.ok){
+        throw new Error(text||`${r.status} ${r.statusText}`);
+      }
+      let parsed=[];
+      try{
+        parsed=text?JSON.parse(text):[];
+      }catch(e){
+        throw new Error('JSON parse error: '+(e.message||e));
+      }
+      if(parsed && Array.isArray(parsed.polylines)){
+        floorplanPolylines = parsed.polylines.map(normalizePolyline).filter(l=>l.length);
+      }else if(Array.isArray(parsed)){
+        const line=normalizePolyline(parsed);
+        if(line.length) floorplanPolylines=[line];
+      }
+      if(parsed){
+        if(Array.isArray(parsed.sensors)){
+          floorplanSensors = parsed.sensors.map(clampSensorPos);
+        }else if(parsed.sensor){
+          const s=parsed.sensor;
+          floorplanSensors=[clampSensorPos({
+            x:s.x, y:s.y, angle:s.angle,
+            device_id: s.device_id||s.deviceId||'',
+            name: s.name||'',
+            model: s.model||''
+          })];
+        }
+        const lastDev=floorplanSensors[floorplanSensors.length-1]?.device_id||'';
+        if(floorplanDeviceSel && lastDev){
+          floorplanDeviceSel.value = lastDev;
+        }
+      }
+      pushFloorplanHistory();
+      floorplanWallsDirty=false;
+      applyFloorplanAutoFit({resetAngles:viewDim==='3d'});
+      enqueueDraw();
+      return true;
+    }catch(e){
+      setError(e?.message || 'No data available');
+      return false;
+    }
+  }
+
+  async function saveFloorplanToHA(){
+    if(!selectedFloorId){
+      setError('Save failed');
+      return;
+    }
+    try{
+      syncActiveSensorState();
+      const sensorsOk = await saveAllFloorplanSensorZones();
+      const body={floor_id:selectedFloorId, polylines:floorplanPolylines, sensors:floorplanSensors.map(clampSensorPos)};
+      const r = await fetch('api/floorplan',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'include',
+        body:JSON.stringify(body)
+      });
+      const text=await r.text();
+      if(!r.ok){
+        throw new Error(text||`${r.status} ${r.statusText}`);
+      }
+      if(sensorsOk) setSaved();
+    }catch(e){
+      setError(e?.message || 'Save failed');
+    }
+  }
   function setCurrentZone(z){
     currentZone=z;
     zoneBtns.forEach(b=>b.classList.toggle('active',b.dataset.zone===z));
-    setStatus('ok',`${z==='excl'?'Exclusion':'Zone '+z} selected`);
+    setReady();
   }
 
-  function pointerDown(px,py,button){
-  if(button == null) button = 0;
+  function setFloorplanTool(mode){
+    const prevTool = floorplanTool;
+    floorplanTool = mode;
+    floorplanEditEnabled = (mode === 'draw');
+    if(mode==='draw'){
+      floorplanPreviewSuppressed=false;
+    }
+    floorplanToolBtns.forEach(btn=>{
+      const active = btn.dataset.tool===mode;
+      btn.classList.toggle('active',active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if(prevTool === 'draw' && mode !== 'draw'){
+      applyFloorplanAutoFit();
+    }
+  }
+
+  function cancelFloorplanTool(){
+    if(!floorplanEnabled) return;
+    if(floorplanTool==='draw' && floorplanActiveLine!==null){
+      const line = floorplanPolylines[floorplanActiveLine];
+      if(line && line.length>=2){
+        setReady();
+      }
+    }
+    floorplanActiveLine=null;
+    floorplanPreview=null;
+    setFloorplanTool('view');
+    floorplanDragMode=null;
+    floorplanSensorHover=null;
+    floorplanSensorDragging=null;
+    floorplanSensorRotating=null;
+    floorplanLengthInput='';
+    enqueueDraw();
+  }
+
+  function applyTypedLength(){
+    if(!floorplanPreviewDir) return false;
+    if(floorplanActiveLine===null) return false;
+    const line=floorplanPolylines[floorplanActiveLine];
+    const lastPt=line && line.length?line[line.length-1]:null;
+    if(!lastPt) return false;
+    const lenCm=Number(floorplanLengthInput);
+    if(!Number.isFinite(lenCm)) return false;
+    const nx=clamp(lastPt.x + floorplanPreviewDir.x*lenCm, FLOORPLAN_BOUNDS.xMin, FLOORPLAN_BOUNDS.xMax);
+    const ny=clamp(lastPt.y + floorplanPreviewDir.y*lenCm, FLOORPLAN_BOUNDS.yMin, FLOORPLAN_BOUNDS.yMax);
+    floorplanPreview={
+      x:nx,
+      y:ny,
+      snapped:false,
+      type:null,
+      snapLineY:null,
+      snapLineX:null
+    };
+    enqueueDraw();
+    return true;
+  }
+
+  function pointerDown(px,py,button,shiftKey=false){
+    if(button == null) button = 0;
+
+    if(viewDim==='2d' && shiftKey && button===0){
+      pan2DDragging=true;
+      panLastX=px;
+      panLastY=py;
+      return;
+    }
 
     if(viewDim==='3d'){
+      if(button!==0) return;
       orbitDragging = true;
+      orbitDragMode = shiftKey ? 'pan' : 'orbit';
       orbitLastX = px;
       orbitLastY = py;
+      return;
+    }
+
+    if(floorplanEnabled){
+      if(!selectedFloorId){
+        setError('No data available');
+        return;
+      }
+      if(IS_MOBILE){
+        return;
+      }
+      floorplanSensorHover=null;
+      if(currentZone && floorplanTool==='zone'){
+        handleFloorplanZoneDown(px,py,shiftKey,button);
+        return;
+      }
+      if(floorplanTool!=='draw' && floorplanTool!=='zone'){
+        handleFloorplanSelectDown(px,py,shiftKey,button);
+        return;
+      }
+      if(button===0 && floorplanActiveLine!==null && floorplanLengthInput){
+        applyTypedLength();
+        if(floorplanPreview){
+          const line=floorplanPolylines[floorplanActiveLine];
+          const lastPt=line && line.length?line[line.length-1]:null;
+          if(lastPt){
+            line.push({x:floorplanPreview.x,y:floorplanPreview.y});
+            floorplanPreview=null;
+            markFloorplanWallsDirty();
+          }
+        }
+        floorplanLengthInput='';
+        enqueueDraw();
+        return;
+      }
+      if(button===2){
+        const hit = floorplanFindVertex(px,py);
+        if(hit.idx>=0 && hit.dist<=FLOORPLAN_SNAP_PX){
+          pushFloorplanHistory();
+          const line=floorplanPolylines[hit.line];
+          line.splice(hit.idx,1);
+          if(line.length===0){
+            floorplanPolylines.splice(hit.line,1);
+            if(floorplanActiveLine===hit.line) floorplanActiveLine=null;
+          }
+          markFloorplanWallsDirty();
+        }else{
+          const lineIdx = floorplanActiveLine;
+          const line = lineIdx!=null ? floorplanPolylines[lineIdx] : null;
+          if(line && line.length>=2){
+            setReady();
+          }
+          floorplanActiveLine=null;
+        }
+        floorplanPreview=null;
+        floorplanLengthInput='';
+        floorplanPreviewSuppressed=true;
+        enqueueDraw();
+        return;
+      }
+      if(button!==0) return;
+      floorplanPreviewSuppressed=false;
+      lastPX=px;
+      lastPY=py;
+
+      const snap = snapToFloorplan(px,py);
+      const lastLine = floorplanActiveLine!=null ? floorplanPolylines[floorplanActiveLine] : null;
+      const lastPt = lastLine && lastLine.length ? lastLine[lastLine.length-1] : null;
+      let world = snap ? {x:snap.x,y:snap.y} : floorplanWorldPointFromPx(px,py);
+      world = applyAxisSnap(world,lastPt,false);
+      const hs = applyHeightSnap(world, px, py);
+      world = hs.world;
+      const ws = applyWidthSnap(world, px, py);
+      world = ws.world;
+      const dirX = world.x - (lastPt?.x ?? world.x);
+      const dirY = world.y - (lastPt?.y ?? world.y);
+      const len = Math.hypot(dirX,dirY)||1;
+      floorplanPreviewDir = {x:dirX/len,y:dirY/len};
+
+      if(floorplanActiveLine===null){
+        pushFloorplanHistory();
+        floorplanPolylines.push([world]);
+        floorplanActiveLine=floorplanPolylines.length-1;
+        markFloorplanWallsDirty();
+        setReady();
+      }else{
+        pushFloorplanHistory();
+        floorplanPolylines[floorplanActiveLine].push(world);
+        markFloorplanWallsDirty();
+      }
+      floorplanPreview=null;
+      enqueueDraw();
       return;
     }
 
@@ -1986,6 +4294,7 @@ const HUMAN_TRIANGLES = [
     if(button === 2){
       const idx = nearestIdx(px,py);
       if(idx >= 0){
+        pushFloorplanHistory();
         pts.splice(idx, 1);
         dragIdx = null;
         dragWhole = false;
@@ -2029,21 +4338,80 @@ const HUMAN_TRIANGLES = [
 
     if(pts.length>=MAX_POINTS) return;
     const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
+    pushFloorplanHistory();
     pts.push({x:clamp(x,X_MIN,X_MAX),y:clamp(y,Y_MIN,Y_MAX)});
     enqueueDraw();
 
   }
 
-  function pointerMove(px,py){
+  function pointerMove(px,py,shiftKey=false){
+    if(pan2DDragging){
+      const dx = px - panLastX;
+      const dy = py - panLastY;
+      panLastX = px;
+      panLastY = py;
+      pan2D(dx,dy);
+      enqueueDraw();
+      return;
+    }
     if(viewDim==='3d'){
       if(!orbitDragging) return;
       const dx = px - orbitLastX;
       const dy = py - orbitLastY;
       orbitLastX = px;
       orbitLastY = py;
-      ORBIT.azimuth += dx * 0.01;
-      ORBIT.elevation += dy * 0.01;
-      ORBIT.elevation = clamp(ORBIT.elevation, ORBIT_LIMITS.minElev, ORBIT_LIMITS.maxElev);
+      if(orbitDragMode === 'pan'){
+        panOrbit(dx, dy);
+      }else{
+        ORBIT.azimuth += dx * ORBIT_ROTATE_SPEED;
+        ORBIT.elevation = clamp(ORBIT.elevation + dy * ORBIT_ROTATE_SPEED, ORBIT_LIMITS.minElev, ORBIT_LIMITS.maxElev);
+      }
+      enqueueDraw();
+      return;
+    }
+
+    if(floorplanEnabled){
+      if(IS_MOBILE) return;
+      if((floorplanSensorDragging!==null || floorplanSensorRotating!==null)){
+        handleFloorplanSelectMove(px,py);
+        return;
+      }
+      if(currentZone && floorplanTool==='zone'){
+        handleFloorplanZoneMove(px,py);
+        return;
+      }
+      if(floorplanTool!=='draw' && floorplanTool!=='zone'){
+        handleFloorplanSelectMove(px,py);
+        return;
+      }
+      if(floorplanPreviewSuppressed){
+        if(floorplanPreview){
+          floorplanPreview=null;
+          enqueueDraw();
+        }
+        return;
+      }
+      const snap=snapToFloorplan(px,py);
+      const line = floorplanActiveLine!=null ? floorplanPolylines[floorplanActiveLine] : null;
+      const lastPt = line && line.length ? line[line.length-1] : null;
+      let world = snap ? {x:snap.x,y:snap.y} : floorplanWorldPointFromPx(px,py);
+      world = applyAxisSnap(world,lastPt,false);
+      const hs = applyHeightSnap(world, px, py);
+      world = hs.world;
+      const ws = applyWidthSnap(world, px, py);
+      world = ws.world;
+      const dirX = world.x - (lastPt?.x ?? world.x);
+      const dirY = world.y - (lastPt?.y ?? world.y);
+      const len = Math.hypot(dirX,dirY)||1;
+      floorplanPreviewDir = {x:dirX/len,y:dirY/len};
+      floorplanPreview={
+        x:world.x,
+        y:world.y,
+        snapped:!!snap,
+        type:snap?.type||null,
+        snapLineY:hs.snapLineY,
+        snapLineX:ws.snapLineX
+      };
       enqueueDraw();
       return;
     }
@@ -2078,40 +4446,118 @@ const HUMAN_TRIANGLES = [
   }
 
   function pointerUp(){
+    pan2DDragging=false;
     if(viewDim==='3d'){
       orbitDragging=false;
+      orbitDragMode='orbit';
+      return;
+    }
+    if(floorplanEnabled){
+      finishFloorplanInteraction();
       return;
     }
     dragIdx=null;
     dragWhole=false;
   }
 
+
+  window.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      cancelFloorplanTool();
+      dragIdx=null;
+      dragWhole=false;
+      floorplanLengthInput='';
+      return;
+    }
+
+    if(floorplanEnabled && (e.key==='z' || e.key==='Z') && (e.metaKey || e.ctrlKey)){
+      e.preventDefault();
+      if(e.shiftKey){
+        redoFloorplan();
+      }else{
+        undoFloorplan();
+      }
+      return;
+    }
+    if(floorplanEnabled && (e.key==='y' || e.key==='Y') && (e.metaKey || e.ctrlKey)){
+      e.preventDefault();
+      redoFloorplan();
+      return;
+    }
+
+    if(floorplanEnabled && floorplanEditEnabled && floorplanActiveLine!==null){
+      const tag=(document.activeElement?.tagName||'').toLowerCase();
+      if(tag==='input' || tag==='textarea' || tag==='select') return;
+      if(e.key>='0' && e.key<='9'){
+        floorplanLengthInput+=e.key;
+        applyTypedLength();
+        e.preventDefault();
+      }else if(e.key==='Backspace'){
+        floorplanLengthInput=floorplanLengthInput.slice(0,-1);
+        applyTypedLength();
+        e.preventDefault();
+      }else if(e.key==='Enter'){
+        applyTypedLength();
+        if(floorplanPreview && floorplanActiveLine!==null){
+          const line=floorplanPolylines[floorplanActiveLine];
+          const lastPt=line && line.length?line[line.length-1]:null;
+          if(lastPt){
+            pushFloorplanHistory();
+            line.push({x:floorplanPreview.x,y:floorplanPreview.y});
+            floorplanPreview=null;
+            markFloorplanWallsDirty();
+            applyFloorplanAutoFitIfDirty();
+            enqueueDraw();
+          }
+        }
+        floorplanLengthInput='';
+        e.preventDefault();
+      }
+    }
+  });
+
   const loadDeviceEntities=pauseDuring(loadDeviceEntitiesCore);
   const loadDetectionRange=pauseDuring(loadDetectionRangeCore);
-  const setDetectionRange=pauseDuring(setDetectionRangeCore);
+  const setDetectionRange=pauseDuring(()=>setDetectionRangeCore(activeRangeInput()));
+  const setFloorplanDetectionRange=pauseDuring(()=>setDetectionRangeCore(floorplanRangeInput));
   const loadZone=pauseDuring(loadZoneCore);
   const loadAll=pauseDuring(loadAllCore);
   const saveCurrentZone=pauseDuring(saveCurrentZoneCore);
+  const saveAllZones=pauseDuring(saveAllZonesForSelectedDevice);
+  const saveFloorplan=pauseDuring(saveFloorplanToHA);
 
   cvs.addEventListener('mousedown',e=>{
-  const p=localPoint(e.clientX,e.clientY);
-  pointerDown(p.x,p.y, e.button);
+    const p=localPoint(e.clientX,e.clientY);
+    pointerDown(p.x,p.y, e.button, e.shiftKey);
   });
   window.addEventListener('mousemove',e=>{
     const p=localPoint(e.clientX,e.clientY);
-    pointerMove(p.x,p.y);
+    pointerMove(p.x,p.y, e.shiftKey);
   });
   window.addEventListener('mouseup',()=>{ pointerUp(); });
   cvs.addEventListener('contextmenu',e=>e.preventDefault());
 
   cvs.addEventListener('wheel',e=>{
-    if(viewDim!=='3d') return;
-    e.preventDefault();
-    const delta = e.deltaY || e.wheelDelta || 0;
-    if(!delta) return;
-    const factor = delta>0 ? 1.1 : 0.9;
-    ORBIT.distance = clamp(ORBIT.distance * factor, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
-    enqueueDraw();
+    const p=localPoint(e.clientX,e.clientY);
+    if(viewDim==='3d'){
+      if(!zoomAllowed()) return;
+      e.preventDefault();
+      const delta = e.deltaY || e.wheelDelta || 0;
+      if(!delta) return;
+      const factor = delta>0 ? 1.1 : 0.9;
+      ORBIT.distance = clamp(ORBIT.distance * factor, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
+      enqueueDraw();
+      return;
+    }
+    if(viewDim==='2d'){
+      if(!zoomAllowed()) return;
+      e.preventDefault();
+      const delta = e.deltaY || e.wheelDelta || 0;
+      if(!delta) return;
+      const factor = delta>0 ? 1.08 : 0.92;
+      zoom2D(factor, p.x, p.y);
+      enqueueDraw();
+    }
   },{passive:false});
 
   function touchDistance(t1,t2){
@@ -2120,10 +4566,45 @@ const HUMAN_TRIANGLES = [
     return Math.hypot(dx,dy);
   }
 
+  function canUseFloorplanGestures(){
+    return !floorplanEnabled || shouldAutoFitFloorplanNow();
+  }
+
   cvs.addEventListener('touchstart',e=>{
+    if(viewDim==='2d'){
+      if(e.touches.length===2){
+        if(!zoomAllowed() || !canUseFloorplanGestures()){
+          e.preventDefault();
+          return;
+        }
+        if(touchMode === 'pointer') pointerUp();
+        pinchZooming = true;
+        orbitDragging = false;
+        touchMode = 'pinch';
+        pinchLastDist = touchDistance(e.touches[0], e.touches[1]);
+        e.preventDefault();
+        return;
+      }
+      if(e.touches.length===1){
+        const t=e.touches[0];
+        if(!t) return;
+        const p=localPoint(t.clientX,t.clientY);
+        touchMode = 'pointer';
+        pointerDown(p.x,p.y, 0, false);
+        e.preventDefault();
+        return;
+      }
+      return;
+    }
     if(viewDim==='3d' && e.touches.length===2){
+      if(!zoomAllowed()){
+        e.preventDefault();
+        return;
+      }
+      if(touchMode === 'pointer') pointerUp();
       pinchZooming = true;
       orbitDragging = false;
+      touchMode = 'pinch';
       pinchLastDist = touchDistance(e.touches[0], e.touches[1]);
       e.preventDefault();
       return;
@@ -2131,115 +4612,198 @@ const HUMAN_TRIANGLES = [
     const t=e.touches[0];
     if(!t) return;
     const p=localPoint(t.clientX,t.clientY);
-    pointerDown(p.x,p.y, 0);
+    touchMode = 'pointer';
+    pointerDown(p.x,p.y, 0, false);
     e.preventDefault();
   },{passive:false});
 
   cvs.addEventListener('touchmove',e=>{
-    if(viewDim==='3d' && pinchZooming && e.touches.length>=2){
-      const d = touchDistance(e.touches[0], e.touches[1]);
-      if(d>0 && pinchLastDist>0){
-        const factor = pinchLastDist / d;
-        ORBIT.distance = clamp(ORBIT.distance * factor, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
-        enqueueDraw();
+    if(touchMode === 'pinch' && e.touches.length>=2){
+      if(viewDim==='2d' && (!zoomAllowed() || !canUseFloorplanGestures())){
+        e.preventDefault();
+        return;
+      }
+      if(viewDim==='3d' && !zoomAllowed()){
+        e.preventDefault();
+        return;
+      }
+      const t1=e.touches[0], t2=e.touches[1];
+      const d = touchDistance(t1, t2);
+      const midX = (t1.clientX + t2.clientX) * 0.5;
+      const midY = (t1.clientY + t2.clientY) * 0.5;
+      if(viewDim==='3d'){
+        if(d>0 && pinchLastDist>0){
+          const factor = pinchLastDist / d;
+          ORBIT.distance = clamp(ORBIT.distance * factor, ORBIT_LIMITS.minDist, ORBIT_LIMITS.maxDist);
+        }
+      }else{
+        if(d>0 && pinchLastDist>0){
+          const currMid = localPoint(midX, midY);
+          const factor = d / pinchLastDist;
+          zoom2D(factor, currMid.x, currMid.y);
+        }
       }
       pinchLastDist = d;
+      enqueueDraw();
       e.preventDefault();
       return;
     }
-    const t=e.touches[0];
-    if(!t) return;
-    const p=localPoint(t.clientX,t.clientY);
-    pointerMove(p.x,p.y);
-    e.preventDefault();
+    if(touchMode === 'pointer' && e.touches.length===1){
+      const t=e.touches[0];
+      if(!t) return;
+      const p=localPoint(t.clientX,t.clientY);
+      pointerMove(p.x,p.y);
+      e.preventDefault();
+    }
   },{passive:false});
 
   cvs.addEventListener('touchend',e=>{
-    if(e.touches.length<2){
+    if(touchMode === 'pinch' && e.touches.length<2){
       pinchZooming=false;
       pinchLastDist=0;
+      touchMode=null;
+      return;
     }
-    pointerUp();
+    if(touchMode === 'pointer' && e.touches.length===0){
+      pointerUp();
+      touchMode=null;
+    }
   },{passive:true});
   cvs.addEventListener('touchcancel',e=>{
     pinchZooming=false;
     pinchLastDist=0;
+    touchMode=null;
     pointerUp();
   },{passive:true});
 
   zoneBtns.forEach(btn=>{
     btn.addEventListener('click',pauseDuring(async()=>{
-      setCurrentZone(btn.dataset.zone);
-      if(selectedDevice){
-        await loadZoneCore(currentZone);
-        enqueueDraw();
+      const zoneId = btn.dataset.zone;
+      const dev = placementDevice() || selectedDevice;
+      if(!dev){
+        setError('No data available');
+        return;
       }
+      setCurrentZone(zoneId);
+      enqueueDraw();
     }));
   });
 
   clearBtn.addEventListener('click',pauseDuring(async()=>{
+    if(floorplanEnabled){
+      floorplanPolylines=[];
+      floorplanActiveLine=null;
+      floorplanPreview=null;
+      floorplanSensors=[];
+      floorplanSensorHover=null;
+      floorplanSensorDragging=null;
+      floorplanSensorRotating=null;
+      floorplanDragMode=null;
+      floorplanHistory=[];
+      floorplanFuture=[];
+      floorplanWallsDirty=false;
+      applyFloorplanAutoFit({resetAngles:viewDim==='3d'});
+      enqueueDraw();
+      setCleared();
+      return;
+    }
     if(!currentZone){
-      setStatus('err','Select a zone first');
       return;
     }
     zones[currentZone]=[];
     enqueueDraw();
-    setStatus('', 'Cleared');
+    setCleared();
   }));
 
-  saveBtn.addEventListener('click',saveCurrentZone);
+  saveBtn.addEventListener('click',()=>{
+    if(floorplanEnabled) saveFloorplan();
+    else saveAllZones();
+  });
   rangeSetBtn.addEventListener('click',setDetectionRange);
   rangeInput.addEventListener('keydown',e=>{
     if(e.key==='Enter') setDetectionRange();
   });
+  if(floorplanRangeSetBtn){
+    floorplanRangeSetBtn.addEventListener('click',setFloorplanDetectionRange);
+  }
+  if(floorplanRangeInput){
+    floorplanRangeInput.addEventListener('keydown',e=>{
+      if(e.key==='Enter') setFloorplanDetectionRange();
+    });
+  }
 
-  function setViewModeButtons(mode){
+  function setViewModeButtons(mode, {silent=false}={}){
     viewMode = mode;
     liveModeBtn.classList.remove('btn-primary','btn-plain');
     heatmapModeBtn.classList.remove('btn-primary','btn-plain');
 
     liveModeBtn.classList.add(mode==='live'?'btn-primary':'btn-plain');
     heatmapModeBtn.classList.add(mode==='heatmap'?'btn-primary':'btn-plain');
+
+    resetOrbitIf3D();
+    if(!silent){
+      setReady();
+    }
   }
 
   liveModeBtn.addEventListener('click',function(){
-    setViewModeButtons('live');
+    setViewModeButtons('live', {silent:true});
+    if(viewDim==='2d'){
+      if(floorplanEnabled) resetFPCam();
+      else reset2DCam();
+    }
     enqueueDraw();
     if(selectedDevice) resumeLive(true);
+    setReady();
   });
 
   async function ensureHeatmapData(){
-    if(!selectedDevice) return;
-    if(heatmapPositions.length) return;
+    if(!selectedDevice) return false;
+    if(heatmapPositions.length) return true;
     const targetEntityIds=entities.filter(e=>
       e.entity_id.endsWith('target_1_x')||e.entity_id.endsWith('target_1_y')||
       e.entity_id.endsWith('target_2_x')||e.entity_id.endsWith('target_2_y')||
       e.entity_id.endsWith('target_3_x')||e.entity_id.endsWith('target_3_y')
     ).map(e=>e.entity_id);
     const hours=Number(heatmapHoursSel.value);
-    heatmapPositions=await fetchHistoricalData(targetEntityIds,hours);
-    heatmapFieldColor=null;
-    heatmapFieldHeight=null;
+    setLoadingHeatmap();
+    try{
+      heatmapPositions=await fetchHistoricalData(targetEntityIds,hours);
+      heatmapFieldColor=null;
+      heatmapFieldHeight=null;
+      return true;
+    }catch(e){
+      heatmapPositions=[];
+      heatmapFieldColor=null;
+      heatmapFieldHeight=null;
+      setError(e?.message || 'No data available');
+      return false;
+    }
   }
 
   async function switchToHeatmap2D(){
     if(!selectedDevice) return;
-    setViewModeButtons('heatmap');
-    viewDim = '2d';
-    await ensureHeatmapData();
-  enqueueDraw();
+    setViewModeButtons('heatmap', {silent:true});
+    if(floorplanEnabled) resetFPCam();
+    else reset2DCam();
+    const ok = await ensureHeatmapData();
+    if(ok) setReady();
+    enqueueDraw();
   }
 
   async function switchToHeatmap3D(){
     if(!selectedDevice) return;
-    setViewModeButtons('heatmap');
-    viewDim = '3d';
-    resetOrbitForHeatmap();
-    await ensureHeatmapData();
+    setViewModeButtons('heatmap', {silent:true});
+    resetOrbit(defaultOrbitDistance());
+    const ok = await ensureHeatmapData();
+    if(ok) setReady();
     enqueueDraw();
   }
 
   heatmapModeBtn.addEventListener('click', async () => {
+    if(floorplanEnabled){
+      return;
+    }
     if (!selectedDevice) return;
 
     if (viewDim === '3d') {
@@ -2251,21 +4815,74 @@ const HUMAN_TRIANGLES = [
 
   viewToggleBtns.forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      if(!selectedDevice) return;
+      if(!selectedDevice && !floorplanEnabled) return;
       const v = btn.dataset.view;
       if(v === '2d'){
         viewDim = '2d';
+        if(floorplanEnabled) applyFloorplanAutoFit();
+        else reset2DCam();
+        setReady();
         enqueueDraw();
       } else {
         viewDim = '3d';
-        resetOrbitForHeatmap();
+        if(floorplanEnabled) applyFloorplanAutoFit({resetAngles:true});
+        else resetOrbit(defaultOrbitDistance());
         if(viewMode === 'heatmap'){
           await ensureHeatmapData();
         }
+        setReady();
         enqueueDraw();
       }
     });
   });
+
+  floorplanBtn.addEventListener('click',pauseDuring(async()=>{
+    floorplanEnabled=!floorplanEnabled;
+    floorplanBtn.classList.toggle('active',floorplanEnabled);
+    floorplanBtn.setAttribute('aria-pressed', floorplanEnabled ? 'true' : 'false');
+    dragIdx=null;
+    dragWhole=false;
+    floorplanActiveLine=null;
+    floorplanPreview=null;
+    floorplanPreviewSuppressed=false;
+    floorplanDragMode=null;
+    floorplanHistory=[];
+    floorplanFuture=[];
+    resetFPCam();
+    reset2DCam();
+    setFloorplanTool('view');
+    if(floorplanEnabled){
+      try{
+        await loadFloorsCore();
+        if(!floorsList.length){
+          setError('No data available');
+        }else{
+          const loaded = await loadFloorplanFromHA();
+          if(loaded) setReady();
+        }
+      }catch(e){
+        setError(e?.message || 'No data available');
+      }
+    }
+    showDeviceSelector();
+    resetOrbitIf3D();
+    if(viewControls && modeTitle){
+      if(floorplanEnabled){
+        modeTitle.textContent='Detection range';
+        viewControls.style.display='none';
+        if(floorplanRangeControls) floorplanRangeControls.style.display='flex';
+        if(viewDim==='3d') applyFloorplanAutoFit({resetAngles:true});
+      }else{
+        modeTitle.textContent='View Mode';
+        viewControls.style.display='flex';
+        if(floorplanRangeControls) floorplanRangeControls.style.display='none';
+        setFloorplanTool('view');
+        resetOrbit(defaultOrbitDistance());
+      }
+    }
+    if(!floorplanEnabled) setReady();
+    enqueueDraw();
+  }));
 
   legendSigmaBtns.forEach(btn=>{
     btn.addEventListener('click',()=>{
@@ -2299,24 +4916,111 @@ const HUMAN_TRIANGLES = [
     }
   });
 
+  floorplanToolBtns.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const tool=btn.dataset.tool;
+      if(!floorplanEnabled){
+        return;
+      }
+      if(floorplanTool === tool){
+        cancelFloorplanTool();
+        return;
+      }
+      if(tool==='sensor'){
+        const dev=placementDevice();
+        if(!dev){
+          setError('Sensor placement failed');
+          return;
+        }
+        setFloorplanTool('sensor');
+        const hasSensor = floorplanSensors.some(s=>s.device_id===dev.device_id);
+        if(!hasSensor) setStatus('ok', 'Click to place selected sensor');
+        else setReady();
+      }else if(tool==='draw'){
+        setFloorplanTool('draw');
+        if(floorplanActiveLine===null && !floorplanPolylines.length){
+          setStatus('ok', 'Click to draw walls');
+        }else{
+          setReady();
+        }
+      }else if(tool==='zone'){
+        const sensor = activeFloorplanSensor();
+        if(!sensor){
+          setError('Zone is not valid');
+          return;
+        }
+        setFloorplanTool('zone');
+        const pts = zones[currentZone] || [];
+        if(!pts.length) setStatus('ok', 'Click to draw zone');
+        else setReady();
+      }
+    });
+  });
+
+  function flashButton(btn){
+    if(!btn) return;
+    btn.classList.add('active');
+    setTimeout(()=>btn.classList.remove('active'),140);
+  }
+
+  if(floorplanUndoBtn){
+    floorplanUndoBtn.addEventListener('click',()=>{
+      if(!floorplanEnabled) return;
+      undoFloorplan();
+      flashButton(floorplanUndoBtn);
+    });
+  }
+  if(floorplanRedoBtn){
+    floorplanRedoBtn.addEventListener('click',()=>{
+      if(!floorplanEnabled) return;
+      redoFloorplan();
+      flashButton(floorplanRedoBtn);
+    });
+  }
+
+  async function handleDeviceSelection(selectEl){
+    if(!selectEl || !selectEl.value){
+      setError('No data available');
+      return;
+    }
+    selectedDevice={
+      device_id:selectEl.value,
+      name:selectEl.options[selectEl.selectedIndex]?.textContent||selectEl.value,
+      model:selectEl.options[selectEl.selectedIndex]?.dataset.model||''
+    };
+    livePos = livePosFor(selectedDevice.device_id);
+    heatmapPositions=[];
+    heatmapFieldColor=null;
+    heatmapFieldHeight=null;
+    setViewModeButtons('live');
+    TUNE.sigmaScale = 1.0;
+    legendSigmaBtns.forEach(b=>b.classList.remove('active'));
+    currentZone = null;
+    zoneBtns.forEach(b=>b.classList.remove('active'));
+    try{
+      const loaded = await fetchZonesFromDevice(selectedDevice);
+      if(loaded && !currentZone) setCurrentZone('1');
+      if(viewDim === '2d') reset2DCam();
+      setReady();
+    }catch(e){
+      setError(e?.message || 'No data available');
+    }finally{
+      syncLayout();
+      resumeLive(true);
+      syncFloorplanDeviceSelector();
+    }
+  }
+
   (async()=>{
     try{
       pauseLive();
       await api('api/template',{template:'{{ 1+1 }}'});
       const res=await api('api/template',{template:TPL_LIST});
       const list=typeof res==='string'?JSON.parse(res||'[]'):res;
-      sel.innerHTML='';
-      list.sort((a,b)=>(a.name||a.device_id).localeCompare(b.name||b.device_id))
-        .forEach((d,i)=>{
-          const opt=document.createElement('option');
-          opt.value=d.device_id;
-          opt.textContent=d.name||d.device_id;
-          opt.dataset.model=d.model||'';
-          if(i===0) opt.selected=true;
-          sel.appendChild(opt);
-        });
-      if(!list.length){
-        setStatus('err','No devices found');
+      devicesList = list;
+      populateDevices(devicesList, null);
+      if(!devicesList.length){
+        setError('No data available');
         return;
       }
       selectedDevice={
@@ -2324,14 +5028,21 @@ const HUMAN_TRIANGLES = [
         name:sel.options[sel.selectedIndex]?.textContent||sel.value,
         model:sel.options[sel.selectedIndex]?.dataset.model||''
       };
-      setStatus('', 'Loading device…');
-      await loadDeviceEntities(selectedDevice.device_id);
-      await loadAll();
-      setStatus('ok','Ready');
+      livePos = livePosFor(selectedDevice.device_id);
+      syncFloorplanDeviceSelector();
+      await fetchZonesFromDevice(selectedDevice);
+      setReady();
     }catch(e){
-      setStatus('err','API error: '+(e.message||e));
+      setError(e?.message || 'No data available');
     }finally{
-      const ro=new ResizeObserver(()=>{ syncLayout(); });
+      const ro=new ResizeObserver(()=>{
+        if(resizeScheduled) return;
+        resizeScheduled=true;
+        requestAnimationFrame(()=>{
+          resizeScheduled=false;
+          syncLayout();
+        });
+      });
       ro.observe(container);
       ro.observe(panelCard);
       window.addEventListener('resize',syncLayout);
@@ -2347,38 +5058,27 @@ const HUMAN_TRIANGLES = [
   })();
 
   sel.addEventListener('change',pauseDuring(async()=>{
-    if(!sel.value){
-      setStatus('err','No device selected');
+    if(floorplanEnabled){
+      selectedFloorId = sel.value || null;
+      if(!selectedFloorId){
+        setError('No data available');
+        return;
+      }
+      const loaded = await loadFloorplanFromHA();
+      if(loaded) setReady();
+      enqueueDraw();
       return;
     }
-    selectedDevice={
-      device_id:sel.value,
-      name:sel.options[sel.selectedIndex]?.textContent||sel.value,
-      model:sel.options[sel.selectedIndex]?.dataset.model||''
-    };
-    heatmapPositions=[];
-    heatmapFieldColor=null;
-    heatmapFieldHeight=null;
-    setViewModeButtons('live');
-    TUNE.sigmaScale = 1.0;
-    viewDim = '2d';
-    legendSigmaBtns.forEach(b=>b.classList.remove('active'));
-    currentZone = null;
-    zoneBtns.forEach(b=>b.classList.remove('active'));
-    try{
-      setStatus('', 'Loading device…');
-      await loadDeviceEntities(selectedDevice.device_id);
-      await loadAll();
-      setStatus('ok','Ready');
-    }catch(e){
-      setStatus('err','Load failed: '+(e.message||e));
-    }finally{
-      syncLayout();
-      resumeLive(true);
-    }
+    await handleDeviceSelection(sel);
   }));
+
+  if(floorplanDeviceSel){
+    floorplanDeviceSel.addEventListener('change',pauseDuring(async()=>{
+      await handleDeviceSelection(floorplanDeviceSel);
+    }));
+  }
 
 })();
 </script>
 </body>
-</html>
+</html> 
