@@ -38,3 +38,6 @@
 
 ## 2025-12-14 — v1.3.7
 - New 2D/3D floorplan editor for sensor placement and zone configuration
+
+## 2025-12-26 — v1.3.8
+- Remember last selected view, floorplan, and device between sessions

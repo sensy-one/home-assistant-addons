@@ -426,6 +426,38 @@
     pointWeight: 0.5
   };
 
+  const UI_STATE_KEY='zone-editor-ui-state';
+  const normalizeViewDim=(v)=> (v==='3d' ? '3d' : '2d');
+  const normalizeViewMode=(v)=> (v==='heatmap' ? 'heatmap' : 'live');
+
+  function loadUiState(){
+    try{
+      if(typeof localStorage==='undefined') return null;
+      const raw=localStorage.getItem(UI_STATE_KEY);
+      if(!raw) return null;
+      const parsed=JSON.parse(raw);
+      return (parsed && typeof parsed==='object') ? parsed : null;
+    }catch(_e){
+      return null;
+    }
+  }
+
+  function persistUiState(){
+    try{
+      if(typeof localStorage==='undefined') return;
+      const next={
+        viewDim,
+        viewMode,
+        floorplanEnabled,
+        selectedFloorId,
+        selectedDeviceId: selectedDevice?.device_id || floorplanDeviceSel?.value || null
+      };
+      localStorage.setItem(UI_STATE_KEY, JSON.stringify(next));
+    }catch(_e){}
+  }
+
+  let initialUiState=null;
+
   let cssW=0, cssH=0, dpr=1, PAD=12;
   let currentZone=null;
   let zones={'1':[],'2':[],'3':[],'excl':[]};
@@ -4741,9 +4773,35 @@ HUMAN_TRIANGLES = [
     heatmapModeBtn.classList.add(mode==='heatmap'?'btn-primary':'btn-plain');
 
     resetOrbitIf3D();
+    persistUiState();
     if(!silent){
       setReady();
     }
+  }
+
+  async function restoreUiState(){
+    const state=loadUiState();
+    if(!state) return;
+    if(state.viewDim) viewDim=normalizeViewDim(state.viewDim);
+    if(state.viewMode) viewMode=normalizeViewMode(state.viewMode);
+    if(typeof state.selectedFloorId==='string') selectedFloorId=state.selectedFloorId;
+
+    if(state.floorplanEnabled){
+      if(!floorplanEnabled) await setFloorplanEnabled(true);
+      return;
+    }
+
+    if(state.viewMode === 'heatmap'){
+      if(viewDim === '3d') await switchToHeatmap3D();
+      else await switchToHeatmap2D();
+      return;
+    }
+
+    setViewModeButtons('live', {silent:true});
+    if(viewDim === '3d') resetOrbit(defaultOrbitDistance());
+    else reset2DCam();
+    enqueueDraw();
+    setReady();
   }
 
   liveModeBtn.addEventListener('click',function(){
@@ -4833,11 +4891,12 @@ HUMAN_TRIANGLES = [
         setReady();
         enqueueDraw();
       }
+      persistUiState();
     });
   });
 
-  floorplanBtn.addEventListener('click',pauseDuring(async()=>{
-    floorplanEnabled=!floorplanEnabled;
+  async function setFloorplanEnabled(nextEnabled){
+    floorplanEnabled=nextEnabled;
     floorplanBtn.classList.toggle('active',floorplanEnabled);
     floorplanBtn.setAttribute('aria-pressed', floorplanEnabled ? 'true' : 'false');
     dragIdx=null;
@@ -4882,6 +4941,11 @@ HUMAN_TRIANGLES = [
     }
     if(!floorplanEnabled) setReady();
     enqueueDraw();
+    persistUiState();
+  }
+
+  floorplanBtn.addEventListener('click',pauseDuring(async()=>{
+    await setFloorplanEnabled(!floorplanEnabled);
   }));
 
   legendSigmaBtns.forEach(btn=>{
@@ -4988,6 +5052,7 @@ HUMAN_TRIANGLES = [
       name:selectEl.options[selectEl.selectedIndex]?.textContent||selectEl.value,
       model:selectEl.options[selectEl.selectedIndex]?.dataset.model||''
     };
+    persistUiState();
     livePos = livePosFor(selectedDevice.device_id);
     heatmapPositions=[];
     heatmapFieldColor=null;
@@ -5014,11 +5079,12 @@ HUMAN_TRIANGLES = [
   (async()=>{
     try{
       pauseLive();
+      initialUiState=loadUiState();
       await api('api/template',{template:'{{ 1+1 }}'});
       const res=await api('api/template',{template:TPL_LIST});
       const list=typeof res==='string'?JSON.parse(res||'[]'):res;
       devicesList = list;
-      populateDevices(devicesList, null);
+      populateDevices(devicesList, initialUiState?.selectedDeviceId || null);
       if(!devicesList.length){
         setError('No data available');
         return;
@@ -5032,6 +5098,7 @@ HUMAN_TRIANGLES = [
       syncFloorplanDeviceSelector();
       await fetchZonesFromDevice(selectedDevice);
       setReady();
+      await restoreUiState();
     }catch(e){
       setError(e?.message || 'No data available');
     }finally{
@@ -5064,6 +5131,7 @@ HUMAN_TRIANGLES = [
         setError('No data available');
         return;
       }
+      persistUiState();
       const loaded = await loadFloorplanFromHA();
       if(loaded) setReady();
       enqueueDraw();

@@ -1,6 +1,6 @@
 name: "S1 Zone editor"
 description: "Add-on for creating and tuning detection zones, live tracking, and heatmap visualization for Sensy-One devices."
-version: "v1.3.7"
+version: "v1.3.8"
 slug: "sensy_one_device_finder"
 init: false
 arch:
