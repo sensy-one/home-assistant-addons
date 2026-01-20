@@ -1548,7 +1548,14 @@
 
   function drawGrid(){
     ctx.save();
-    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
+    ctx.save();
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#0a0d12';
+    ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
+    ctx.restore();
+
     ctx.lineWidth=hairline();
     const gridColor=cssVar('--grid')||'#1e2431';
     ctx.strokeStyle=gridColor;
@@ -3427,7 +3434,14 @@ HUMAN_TRIANGLES = [
   }
 
   function drawFloorplan3D(){
-    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
+    ctx.save();
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#0a0d12';
+    ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
+    ctx.restore();
+
     updateCamera3D(FLOORPLAN_BOUNDS);
     drawGrid3D(FLOORPLAN_BOUNDS, GRID);
     drawFloorplanWalls3D();
@@ -3435,7 +3449,14 @@ HUMAN_TRIANGLES = [
   }
 
   function drawScene3D(){
-    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
+    ctx.save();
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#0a0d12'; 
+    ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
+    ctx.restore();
+
     updateCamera3D();
     drawGrid3D();
     drawFov3D(MAX_RANGE,false);
@@ -3458,7 +3479,13 @@ HUMAN_TRIANGLES = [
   }
 
   function draw(){
-    ctx.clearRect(0,0,cvs.width/dpr,cvs.height/dpr);
+    ctx.save();
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#0a0d12'; 
+    ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
+    ctx.restore();
 
     if(floorplanEnabled){
       if(viewDim === '3d') drawFloorplan3D();
