@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-01-22 — v1.4.9
+* Added full ceiling (top-down) and wall-mounted FoV support in preparation for the E1 Pro Multi Sense launch.
+* Extended live target tracking from 3 to 5 simultaneous targets to support E1 Pro capabilities.
+* Refined Live Targets and Heatmap views for a calmer visual presentation by removing unnecessary grids and overlays.
+* Fixed Heatmap legend + / − buttons so they behave as momentary controls instead of remaining visually pressed.
+* Improved Floorplan editing UX:
+  * Grid is now visible only while drawing walls, placing sensors, or drawing zones.
+  * Sensor FoVs are shown only during active edit modes and hidden during normal viewing.
+  * Overall floorplan view feels cleaner and more compact outside edit modes.
+* Simplified zone behavior to allow fully free zone drawing without FoV or range constraints.
+* Reduced visual clutter and removed legacy state leakage between sensors, ensuring consistent per-sensor behavior.
+* Various internal optimizations and UI cleanups to improve stability, predictability, and responsiveness.
+
 ## 2026-01-20 — v1.3.9
 - Fix canvas background rendering on Windows by explicitly filling the canvas instead of relying on CSS background
 

@@ -221,6 +221,7 @@
     .panel{padding:calc(6px * var(--ui));gap:calc(6px * var(--ui))}
     .zones{gap:calc(6px * var(--ui))}
   }
+
 </style>
 </head>
 <body style="opacity:0;">
@@ -389,7 +390,9 @@
   const WORLD_W = X_MAX - X_MIN;
   const WORLD_H = Y_MAX - Y_MIN;
   const MAX_RANGE=600, MAX_POINTS=8, FOV_DEG=120, GRID=100;
+  const TOP_RANGE=400;
   const BASE_BOUNDS = {xMin:X_MIN, xMax:X_MAX, yMin:Y_MIN, yMax:Y_MAX};
+  const TOP_BOUNDS = {xMin:-TOP_RANGE, xMax:TOP_RANGE, yMin:-TOP_RANGE, yMax:TOP_RANGE};
   const FLOORPLAN_SCALE = 6;
   const FLOORPLAN_INITIAL_SCALE = 2;
   const FLOORPLAN_W = WORLD_W * FLOORPLAN_SCALE;
@@ -464,7 +467,9 @@
   const makeLivePos=()=>({
     1: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 },
     2: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 },
-    3: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 }
+    3: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 },
+    4: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 },
+    5: { x: NaN, y: NaN, px: NaN, py: NaN, heading: 0 }
   });
   const livePosMap={};
   let livePos=makeLivePos();
@@ -478,6 +483,7 @@
   let devicesList=[];
   let floorsList=[];
   let entities=[], detRange=MAX_RANGE, saving=false;
+  let installMode='side';
   let viewMode='live';
   let viewDim='2d';
   let floorplanEnabled=false;
@@ -534,7 +540,7 @@
   };
 
   function activeBounds(){
-    return floorplanEnabled ? FLOORPLAN_BOUNDS : BASE_BOUNDS;
+    return floorplanEnabled ? FLOORPLAN_BOUNDS : baseBounds();
   }
 
   function recenterOrbitTarget(bounds=activeBounds()){
@@ -600,6 +606,18 @@
   const cssVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const uiScale=()=>parseFloat(cssVar('--ui')||'1')||1;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const fovMaxRange=(mode=installMode)=> (mode==='top' ? TOP_RANGE : MAX_RANGE);
+  function baseBounds(){
+    return installMode==='top' ? TOP_BOUNDS : BASE_BOUNDS;
+  }
+  function clampBaseX(v){
+    const b=baseBounds();
+    return clamp(v, b.xMin, b.xMax);
+  }
+  function clampBaseY(v){
+    const b=baseBounds();
+    return clamp(v, b.yMin, b.yMax);
+  }
   const hairline=()=>1/Math.max(1,dpr);
   const alignPx=(v)=>Math.round(v)+0.5*hairline();
   const IS_MOBILE = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window && !matchMedia('(any-pointer: fine)').matches);
@@ -629,8 +647,9 @@
 
   function reset2DCam(){
     cam2D.zoom=1;
-    cam2D.cx=(X_MIN+X_MAX)*0.5;
-    cam2D.cy=(Y_MIN+Y_MAX)*0.5;
+    const b=baseBounds();
+    cam2D.cx=(b.xMin+b.xMax)*0.5;
+    cam2D.cy=(b.yMin+b.yMax)*0.5;
   }
 
   function resetFPCam(){
@@ -638,7 +657,7 @@
   }
 
   const activeCam=()=> floorplanEnabled ? camFP : cam2D;
-  const activeBounds2D=()=> floorplanEnabled ? FLOORPLAN_BOUNDS : BASE_BOUNDS;
+  const activeBounds2D=()=> floorplanEnabled ? FLOORPLAN_BOUNDS : baseBounds();
 
   function clampCam(cam,bounds){
     const halfW = (bounds.xMax - bounds.xMin) * 0.55;
@@ -689,40 +708,46 @@
 
   const pauseDuring=(fn)=>async(...a)=>{ pauseLive(); try{ return await fn(...a); } finally{ resumeLive(); } };
 
-  function setStatus(kind,msg){
-    sDot.className='dot status-icon'+(kind?(' '+kind):'');
-    sText.value=msg||'';
+  let statusResetTimer=null;
+  function setStatusText(text){
+    if(statusResetTimer){
+      clearTimeout(statusResetTimer);
+      statusResetTimer=null;
+    }
+    sDot.className='dot status-icon ok';
+    sText.value=text||'Ready';
+  }
+
+  function scheduleStatusReady(){
+    if(statusResetTimer) clearTimeout(statusResetTimer);
+    statusResetTimer=setTimeout(()=>{
+      statusResetTimer=null;
+      sDot.className='dot status-icon ok';
+      sText.value='Ready';
+    }, 1200);
   }
 
   function setReady() {
-    setStatus('ok', 'Ready');
+    setStatusText('Ready');
   }
 
   function setLoadingHeatmap() {
-    setStatus('ok', 'Loading heatmap…');
+    setStatusText('Loading heatmap…');
   }
 
   function setSaved() {
-    setStatus('ok', 'Saved');
+    setStatusText('Saved');
+    scheduleStatusReady();
   }
 
   function setCleared() {
-    setStatus('ok', 'Cleared');
+    setStatusText('Cleared');
+    scheduleStatusReady();
   }
 
-  function setError(msg) {
-    setStatus('err', msg || 'Error');
+  function reportError(msg){
+    if(msg) console.error(msg);
   }
-
-  window.addEventListener('error',e=>{
-    const message = e?.error?.message || e?.message || 'Error';
-    setError(message);
-  });
-  window.addEventListener('unhandledrejection',e=>{
-    const reason = e?.reason;
-    const message = reason ? (reason.message || String(reason)) : 'Error';
-    setError(message);
-  });
 
   function populateDevices(list, selectedId, targetSel=sel){
     if(!targetSel) return;
@@ -816,7 +841,9 @@
 {% set out = namespace(
   x1=0.0,y1=0.0,a1=0.0,
   x2=0.0,y2=0.0,a2=0.0,
-  x3=0.0,y3=0.0,a3=0.0
+  x3=0.0,y3=0.0,a3=0.0,
+  x4=0.0,y4=0.0,a4=0.0,
+  x5=0.0,y5=0.0,a5=0.0
 ) %}
 {% for s in states if (s.entity_id | device_id) == dev %}
   {% set id = s.entity_id %}
@@ -831,14 +858,23 @@
   {% if id.endswith('target_3_x') %}{% set out.x3 = (s.state | float(0)) %}{% endif %}
   {% if id.endswith('target_3_y') %}{% set out.y3 = (s.state | float(0)) %}{% endif %}
   {% if id.endswith('target_3_angle') %}{% set out.a3 = (s.state | float(0)) %}{% endif %}
+
+  {% if id.endswith('target_4_x') %}{% set out.x4 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_4_y') %}{% set out.y4 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_4_angle') %}{% set out.a4 = (s.state | float(0)) %}{% endif %}
+
+  {% if id.endswith('target_5_x') %}{% set out.x5 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_5_y') %}{% set out.y5 = (s.state | float(0)) %}{% endif %}
+  {% if id.endswith('target_5_angle') %}{% set out.a5 = (s.state | float(0)) %}{% endif %}
 {% endfor %}
 {{ {
   '1': {'x': out.x1, 'y': out.y1, 'angle': out.a1},
   '2': {'x': out.x2, 'y': out.y2, 'angle': out.a2},
-  '3': {'x': out.x3, 'y': out.y3, 'angle': out.a3}
+  '3': {'x': out.x3, 'y': out.y3, 'angle': out.a3},
+  '4': {'x': out.x4, 'y': out.y4, 'angle': out.a4},
+  '5': {'x': out.x5, 'y': out.y5, 'angle': out.a5}
 } | tojson }}
 `.trim());
-
 
   async function fetchTargetsForDevice(deviceId){
     const tpl=targetsTemplate(deviceId);
@@ -846,7 +882,7 @@
     const obj=(typeof res==='string')?JSON.parse(res||'{}'):res;
     const lpMap = livePosFor(deviceId);
     let changed=false;
-    for (const n of [1, 2, 3]) {
+    for (const n of [1, 2, 3, 4, 5]) {
       const item = obj?.[String(n)] || {};
       const x = Number(item.x);
       const y = Number(item.y);
@@ -906,6 +942,11 @@
   function findEntityIdBySuffix(suffix){
     return (entities.find(x=>x.entity_id.endsWith(suffix))?.entity_id)||null;
   }
+  function detectInstallMode(){
+    const match=entities.find(x=>x.entity_id.includes('radar_installation_method'));
+    const state=(match?.state ?? '').toString().trim().toLowerCase();
+    return (state==='top' || state==='side') ? state : 'side';
+  }
   function readNumberBySuffix(suffix){
     const e=entities.find(x=>x.entity_id.endsWith(suffix));
     if(!e) return null;
@@ -940,6 +981,20 @@
     const rows=await api('api/device_entities',{device_id},{reloadOnError:false});
     const arr=Array.isArray(rows)?rows:JSON.parse(rows||'[]');
     entities=arr.map(e=>({entity_id:e.entity_id,domain:e.domain,state:e.state,attributes:e.attributes||{}}));
+    const nextMode = detectInstallMode();
+    if(selectedDevice?.device_id === device_id){
+      if(nextMode !== installMode){
+        installMode = nextMode;
+        heatmapFieldColor=null;
+        heatmapFieldHeight=null;
+        heatmapFieldW=0;
+        heatmapFieldH=0;
+        if(!floorplanEnabled && viewDim === '2d') reset2DCam();
+        enqueueDraw();
+      }else{
+        installMode = nextMode;
+      }
+    }
   }
 
   async function loadFloorsCore(){
@@ -992,31 +1047,59 @@
   }
 
   const sensorAngle=(s)=> (s && Number.isFinite(s.angle)) ? s.angle : 0;
+  function normalizeInstallModeValue(raw){
+    const val=(raw ?? '').toString().trim().toLowerCase();
+    return (val==='top' || val==='side') ? val : null;
+  }
+  function sensorInstallMode(sensor){
+    return normalizeInstallModeValue(
+      sensor?.install_mode ?? sensor?.installMode ?? sensor?.mount_mode ?? sensor?.mountMode ?? sensor?.mode
+    ) || 'side';
+  }
+  function clampFovRange(range, mode){
+    const maxR=fovMaxRange(mode);
+    return Math.max(0, Math.min(maxR, range|0));
+  }
+  const sensorFovRange=(sensor, mode)=> clampFovRange(sensorDetRange(sensor), mode);
   const cloneZones=(src)=>({
     '1':[...(src?.['1']||[])].map(p=>({x:p.x,y:p.y})),
     '2':[...(src?.['2']||[])].map(p=>({x:p.x,y:p.y})),
     '3':[...(src?.['3']||[])].map(p=>({x:p.x,y:p.y})),
     'excl':[...(src?.['excl']||[])].map(p=>({x:p.x,y:p.y}))
   });
-  const makeSensor=(x,y,dev)=>({
-    x,y,
-    angle:0,
-    device_id:dev?.device_id||'',
-    name:dev?.name||'',
-    model:dev?.model||'',
-    detRange: detRange,
-    zones: cloneZones(zones)
-  });
-  const sensorDetRange=(s)=> s && s.device_id===selectedDevice?.device_id ? detRange :
-    (Number.isFinite(s?.detRange)?s.detRange:detRange);
-  const sensorZones=(s)=> s && s.device_id===selectedDevice?.device_id ? zones : (s?.zones || zones);
+  const makeSensor=(x,y,dev)=>{
+    const mode = dev?.device_id===selectedDevice?.device_id ? normalizeInstallModeValue(installMode) : null;
+    const sensor={
+      x,y,
+      angle:0,
+      device_id:dev?.device_id||'',
+      name:dev?.name||'',
+      model:dev?.model||'',
+      detRange: detRange,
+      zones: cloneZones(zones)
+    };
+    if(mode) sensor.install_mode = mode;
+    return sensor;
+  };
+  const sensorDetRange=(s)=>{
+    const raw=Number(s?.detRange ?? s?.det_range ?? s?.detection_range ?? s?.detection_range_cm);
+    return Number.isFinite(raw) ? raw : 0;
+  };
+  const emptyZones=()=>({'1':[],'2':[],'3':[],'excl':[]});
+  const sensorZones=(s)=> (s?.zones || emptyZones());
   const clampSensorPos=(s)=>{
     const cloned = {...s};
     cloned.x=clamp(Number(s.x)||0,FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax);
     cloned.y=clamp(Number(s.y)||0,FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax);
     cloned.angle=Number(s.angle)||0;
-    cloned.detRange=Number.isFinite(s.detRange)?clamp(Number(s.detRange),Y_MIN,MAX_RANGE):detRange;
-    cloned.zones = cloneZones(s.zones||zones);
+    if(Number.isFinite(Number(s.detRange))){
+      cloned.detRange=clamp(Number(s.detRange),Y_MIN,MAX_RANGE);
+    }
+    const rawMode=normalizeInstallModeValue(
+      s?.install_mode ?? s?.installMode ?? s?.mount_mode ?? s?.mountMode ?? s?.mode
+    );
+    if(rawMode) cloned.install_mode=rawMode;
+    cloned.zones = cloneZones(s.zones||emptyZones());
     return cloned;
   };
 
@@ -1030,11 +1113,22 @@
     enqueueDraw();
   }
 
+  function clearZoneSelection(){
+    currentZone=null;
+    zoneBtns.forEach(b=>b.classList.remove('active'));
+  }
+
+  function deselectZonesUI(){
+    clearZoneSelection();
+    dragIdx=null;
+    dragWhole=false;
+  }
+
   function selectSensorContext(sensor){
     if(!sensor || !sensor.device_id) return;
     selectedDevice={device_id:sensor.device_id,name:sensor.name||sensor.device_id,model:sensor.model||''};
     adoptZonesFromSensor(sensor);
-    if(!currentZone) setCurrentZone('1');
+    clearZoneSelection();
   }
 
   function updateModeSections(){
@@ -1086,10 +1180,26 @@
   }
 
   async function loadDetectionRangeCore(){
-    let v=readNumberBySuffix('detection_range_cm');
-    if(v===null) v=readNumberBySuffix('detection_range');
+    let v=null;
+    for(const suffix of rangeSuffixesForMode()){
+      v=readNumberBySuffix(suffix);
+      if(v!==null) break;
+    }
     detRange=Math.round(Math.max(Y_MIN,Math.min(MAX_RANGE,v??MAX_RANGE)));
     syncRangeInputs(detRange);
+  }
+
+  function rangeSuffixesForMode(mode=installMode){
+    const radarSuffix = mode === 'top' ? 'radar_top_range' : 'radar_side_range';
+    return [radarSuffix, 'detection_range_cm', 'detection_range'];
+  }
+
+  function resolveRangeSuffix(){
+    const suffixes = rangeSuffixesForMode();
+    for(const suffix of suffixes){
+      if(findEntityIdBySuffix(suffix)) return suffix;
+    }
+    return null;
   }
 
   async function setDetectionRangeCore(inputEl=activeRangeInput()){
@@ -1100,18 +1210,16 @@
     }
     val=Math.max(Y_MIN,Math.min(MAX_RANGE,val));
     try{
-      try{
-        await setNumberBySuffix('detection_range_cm',val);
-      }catch{
-        await setNumberBySuffix('detection_range',val);
-      }
+      const suffix = resolveRangeSuffix();
+      if(!suffix) throw new Error('Range entity not found');
+      await setNumberBySuffix(suffix,val);
       detRange=val;
       syncRangeInputs(val);
       syncActiveSensorState();
       setSaved();
       enqueueDraw();
     }catch(e){
-      setError(e?.message || 'Save failed');
+      reportError(e?.message || 'Save failed');
     }
   }
 
@@ -1120,16 +1228,19 @@
     const n=Math.max(0,Math.min(MAX_POINTS,Math.round(readNumberBySuffix(id.count)||0)));
     const pts=[];
     for(let i=1;i<=n;i++){
-      const x=Math.round(readNumberBySuffix(id.x(i))??0);
-      const y=Math.round(readNumberBySuffix(id.y(i))??0);
-      pts.push({x:clamp(x,X_MIN,X_MAX), y:clamp(y,Y_MIN,Y_MAX)});
+      const x=readNumberBySuffix(id.x(i));
+      const y=readNumberBySuffix(id.y(i));
+      pts.push({
+        x: Number.isFinite(x) ? x : 0,
+        y: Number.isFinite(y) ? y : 0
+      });
     }
     zones[z]=pts;
   }
 
   async function loadAllCore(){
     if(!selectedDevice){
-      setError('No data available');
+      reportError('No data available');
       return;
     }
     await loadDetectionRangeCore();
@@ -1140,7 +1251,7 @@
   async function fetchZonesFromDevice(dev){
     const target = dev || selectedDevice;
     if(!target || !target.device_id){
-      setError('No data available');
+      reportError('No data available');
       return false;
     }
     selectedDevice={
@@ -1164,7 +1275,7 @@
   async function saveCurrentZoneCore(){
     if(saving) return;
     if(!selectedDevice){
-      setError('Save failed');
+      reportError('Save failed');
       return;
     }
     if(!currentZone){
@@ -1179,8 +1290,10 @@
       const tasks=[];
       for(let i=1;i<=MAX_POINTS;i++){
         const p=pts[i-1]||{x:0,y:0};
-        tasks.push(setNumberBySuffix(id.x(i),Math.round(clamp(p.x||0,X_MIN,X_MAX))));
-        tasks.push(setNumberBySuffix(id.y(i),Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
+        const x=Number.isFinite(p.x) ? p.x : 0;
+        const y=Number.isFinite(p.y) ? p.y : 0;
+        tasks.push(setNumberBySuffix(id.x(i),x));
+        tasks.push(setNumberBySuffix(id.y(i),y));
       }
       await Promise.allSettled(tasks);
       await setNumberBySuffix(id.count,n);
@@ -1188,7 +1301,7 @@
       await loadZoneCore(currentZone);
       enqueueDraw();
     }catch(e){
-      setError(e?.message || 'Save failed');
+      reportError(e?.message || 'Save failed');
     }finally{
       saving=false;
       saveBtn.disabled=false;
@@ -1198,7 +1311,7 @@
   async function saveAllZonesForSelectedDevice(){
     if(saving) return;
     if(!selectedDevice){
-      setError('Save failed');
+      reportError('Save failed');
       return;
     }
     const tasks=[];
@@ -1211,15 +1324,18 @@
         const n=Math.min(MAX_POINTS,pts.length);
         for(let i=1;i<=MAX_POINTS;i++){
           const p=pts[i-1]||{x:0,y:0};
-          tasks.push(setNumberBySuffix(id.x(i),Math.round(clamp(p.x||0,X_MIN,X_MAX))));
-          tasks.push(setNumberBySuffix(id.y(i),Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
+          const x=Number.isFinite(p.x) ? p.x : 0;
+          const y=Number.isFinite(p.y) ? p.y : 0;
+          tasks.push(setNumberBySuffix(id.x(i),x));
+          tasks.push(setNumberBySuffix(id.y(i),y));
         }
         tasks.push(setNumberBySuffix(id.count,n));
       }
       await Promise.allSettled(tasks);
       setSaved();
+      deselectZonesUI();
     }catch(e){
-      setError(e?.message || 'Save failed');
+      reportError(e?.message || 'Save failed');
     }finally{
       saving=false;
       saveBtn.disabled=false;
@@ -1237,8 +1353,10 @@
       const n=Math.min(MAX_POINTS,pts.length);
       for(let i=1;i<=MAX_POINTS;i++){
         const p=pts[i-1]||{x:0,y:0};
-        tasks.push(setNumberBySuffix(id.x(i),Math.round(clamp(p.x||0,X_MIN,X_MAX))));
-        tasks.push(setNumberBySuffix(id.y(i),Math.round(clamp(p.y||0,Y_MIN,Y_MAX))));
+        const x=Number.isFinite(p.x) ? p.x : 0;
+        const y=Number.isFinite(p.y) ? p.y : 0;
+        tasks.push(setNumberBySuffix(id.x(i),x));
+        tasks.push(setNumberBySuffix(id.y(i),y));
       }
       tasks.push(setNumberBySuffix(id.count,n));
     }
@@ -1256,7 +1374,7 @@
         try{
           await saveAllZonesForDevice(selectedDevice.device_id, zones);
         }catch(e){
-          setError(e?.message || 'Save failed');
+          reportError(e?.message || 'Save failed');
           ok = false;
         }finally{
           saving=false;
@@ -1278,7 +1396,7 @@
         await saveAllZonesForDevice(sensor.device_id, sensor.zones || {});
       }
     }catch(e){
-      setError(e?.message || 'Save failed');
+      reportError(e?.message || 'Save failed');
       ok = false;
     }finally{
       saving=false;
@@ -1343,8 +1461,24 @@
 
   function innerW(){ return Math.max(2,cssW-2*PAD); }
   function innerH(){ return Math.max(2,cssH-2*PAD); }
-  const baseScaleX = ()=>innerW()/WORLD_W;
-  const baseScaleY = ()=>innerH()/WORLD_H;
+  const baseScaleX = ()=>{
+    const b = baseBounds();
+    const worldW = b.xMax - b.xMin;
+    const worldH = b.yMax - b.yMin;
+    if(installMode==='top'){
+      return Math.min(innerW()/worldW, innerH()/worldH);
+    }
+    return innerW()/worldW;
+  };
+  const baseScaleY = ()=>{
+    const b = baseBounds();
+    const worldW = b.xMax - b.xMin;
+    const worldH = b.yMax - b.yMin;
+    if(installMode==='top'){
+      return Math.min(innerW()/worldW, innerH()/worldH);
+    }
+    return innerH()/worldH;
+  };
   const fpBaseScaleX = ()=>innerW()/FLOORPLAN_W;
   const fpBaseScaleY = ()=>innerH()/FLOORPLAN_H;
 
@@ -1580,6 +1714,48 @@
     ctx.restore();
   }
 
+  function drawCircularGrid(){
+    ctx.save();
+    ctx.save();
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#0a0d12';
+    ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
+    ctx.restore();
+
+    ctx.lineWidth=hairline();
+    const gridColor=cssVar('--grid')||'#1e2431';
+    ctx.strokeStyle=gridColor;
+    ctx.globalAlpha=1;
+
+    const step=GRID;
+    const maxR=fovMaxRange('top');
+    for(let r=step;r<=maxR;r+=step){
+      const pts=makeFovPoints(r,'top');
+      if(pts.length<2) continue;
+      ctx.beginPath();
+      ctx.moveTo(toPxX(pts[0].x),toPxY(pts[0].y));
+      for(let i=1;i<pts.length;i++) ctx.lineTo(toPxX(pts[i].x),toPxY(pts[i].y));
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    const r=maxR;
+    ctx.beginPath();
+    ctx.moveTo(alignPx(toPxX(-r)),alignPx(toPxY(0)));
+    ctx.lineTo(alignPx(toPxX(r)),alignPx(toPxY(0)));
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(alignPx(toPxX(0)),alignPx(toPxY(-r)));
+    ctx.lineTo(alignPx(toPxX(0)),alignPx(toPxY(r)));
+    ctx.stroke();
+
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
   function drawFloorplanGrid2D(){
     ctx.save();
     ctx.lineWidth=hairline();
@@ -1613,8 +1789,24 @@
     ctx.restore();
   }
 
+  const isMobileUI=()=>IS_MOBILE;
+  function shouldShowFloorplanGrid(){
+    if(!floorplanEnabled) return false;
+    if(isMobileUI()) return false;
+    if(floorplanTool==='draw' || floorplanTool==='sensor' || floorplanTool==='zone') return true;
+    if(floorplanActiveLine!==null) return true;
+    if(floorplanSensorDragging!==null || floorplanSensorRotating!==null) return true;
+    if(floorplanZoneDragIdx!=null || floorplanZoneDragWhole) return true;
+    return false;
+  }
+
+  function shouldShowFloorplanFov(){
+    if(!floorplanEnabled) return false;
+    return (floorplanTool==='draw' || floorplanTool==='sensor' || floorplanTool==='zone');
+  }
+
   function drawFloorplan2DView(){
-    drawFloorplanGrid2D();
+    if(shouldShowFloorplanGrid()) drawFloorplanGrid2D();
     drawFloorplanPolylines();
     drawFloorplanPreviewLine();
     drawFloorplanSensorOverlay2D();
@@ -1662,23 +1854,53 @@
     drawFloorplanHandles();
   }
 
-  function makeFovPoints(range){
+  function makeFovPoints(range, mode='side'){
     const pts=[];
-    const half=FOV_DEG/2;
     const rad=Math.PI/180;
+    const limit=fovMaxRange(mode);
+    const r=Math.max(0,Math.min(limit,range|0));
+    if(mode==='top'){
+      for(let a=0;a<=360;a+=3){
+        const x=r*Math.sin(a*rad);
+        const y=r*Math.cos(a*rad);
+        pts.push({x,y});
+      }
+      if(pts.length) pts.push({x:pts[0].x,y:pts[0].y});
+      return pts;
+    }
+    const half=FOV_DEG/2;
     pts.push({x:0,y:0});
     for(let a=-half;a<=half;a+=1){
-      const x=range*Math.sin(a*rad);
-      const y=range*Math.cos(a*rad);
+      const x=r*Math.sin(a*rad);
+      const y=r*Math.cos(a*rad);
       pts.push({x,y});
     }
     pts.push({x:0,y:0});
     return pts;
   }
 
+  function makeFovArcPoints(range, mode='side'){
+    const pts=[];
+    const rad=Math.PI/180;
+    const limit=fovMaxRange(mode);
+    const r=Math.max(0,Math.min(limit,range|0));
+    if(mode==='top'){
+      for(let a=0;a<=360;a+=3){
+        pts.push({x:r*Math.sin(a*rad), y:r*Math.cos(a*rad)});
+      }
+    }else{
+      const half=FOV_DEG/2;
+      for(let a=-half;a<=half;a+=2){
+        pts.push({x:r*Math.sin(a*rad), y:r*Math.cos(a*rad)});
+      }
+    }
+    return pts;
+  }
+
   function drawFov(range,lighter=false){
-    const r=Math.max(0,Math.min(MAX_RANGE,range|0));
-    const pts=makeFovPoints(r);
+    const maxR=fovMaxRange();
+    const r=Math.max(0,Math.min(maxR,range|0));
+    const pts=makeFovPoints(r, installMode);
     ctx.beginPath();
     ctx.moveTo(toPxX(pts[0].x),toPxY(pts[0].y));
     for(let i=1;i<pts.length;i++) ctx.lineTo(toPxX(pts[i].x),toPxY(pts[i].y));
@@ -1687,6 +1909,51 @@
     ctx.fillStyle=cssVar('--fov');
     ctx.fill();
     ctx.globalAlpha=1;
+  }
+
+  function drawFovGuides2D(){
+    const maxR=fovMaxRange();
+    if(maxR<=0) return;
+    ctx.save();
+    ctx.lineWidth=Math.max(1, hairline()*1);
+    ctx.strokeStyle=cssVar('--fov')||'#1e2431';
+    ctx.globalAlpha=0.25;
+
+    for(let r=GRID;r<=maxR;r+=GRID){
+      const pts=makeFovArcPoints(r, installMode);
+      if(pts.length<2) continue;
+      ctx.beginPath();
+      ctx.moveTo(toPxX(pts[0].x),toPxY(pts[0].y));
+      for(let i=1;i<pts.length;i++) ctx.lineTo(toPxX(pts[i].x),toPxY(pts[i].y));
+      if(installMode==='top') ctx.closePath();
+      ctx.stroke();
+    }
+
+    if(installMode==='top'){
+      ctx.beginPath();
+      ctx.moveTo(alignPx(toPxX(-maxR)),alignPx(toPxY(0)));
+      ctx.lineTo(alignPx(toPxX(maxR)),alignPx(toPxY(0)));
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(alignPx(toPxX(0)),alignPx(toPxY(-maxR)));
+      ctx.lineTo(alignPx(toPxX(0)),alignPx(toPxY(maxR)));
+      ctx.stroke();
+    }else{
+      const ox=alignPx(toPxX(0)), oy=alignPx(toPxY(0));
+      const half=FOV_DEG/2;
+      for(const a of [-half, 0, half]){
+        const ang=a * Math.PI/180;
+        const x=Math.sin(ang)*maxR;
+        const y=Math.cos(ang)*maxR;
+        ctx.beginPath();
+        ctx.moveTo(ox,oy);
+        ctx.lineTo(alignPx(toPxX(x)),alignPx(toPxY(y)));
+        ctx.stroke();
+      }
+    }
+
+    ctx.globalAlpha=1;
+    ctx.restore();
   }
 
   function drawPolygon(pts,style){
@@ -1843,12 +2110,13 @@
     };
   }
 
+  const mobileTargetScale=()=> (isMobileUI() ? 0.8 : 1);
   function targetRadius(){
-    return wallHandleRadius();
+    return wallHandleRadius() * mobileTargetScale();
   }
 
   function floorplanTargetRadius(){
-    return wallHandleRadius();
+    return wallHandleRadius() * mobileTargetScale();
   }
 
   const T_JOIN_EPS = 0.75;
@@ -1903,11 +2171,11 @@
 
     const color = WALL_COLOR;
     const r = targetRadius();
-    for (const n of [1, 2, 3]) {
+    for (const n of [1, 2, 3, 4, 5]) {
       const p = live[n];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x === 0 && p.y === 0)) continue;
-      const px = toPxX(clamp(p.x, X_MIN, X_MAX));
-      const py = toPxY(clamp(p.y, Y_MIN, Y_MAX));
+      const px = toPxX(clampBaseX(p.x));
+      const py = toPxY(clampBaseY(p.y));
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fillStyle = color;
@@ -1979,9 +2247,12 @@
   function kdeHeatmap(points, w, h){
     const grid = new Float32Array(w*h);
     const pw = Math.max(0.01, TUNE.pointWeight);
+    const b = baseBounds();
+    const worldW = b.xMax - b.xMin;
+    const worldH = b.yMax - b.yMin;
     for(const p of points){
-      const x = (p.x - X_MIN) / WORLD_W * (w-1);
-      const y = (p.y - Y_MIN) / WORLD_H * (h-1);
+      const x = (p.x - b.xMin) / worldW * (w-1);
+      const y = (p.y - b.yMin) / worldH * (h-1);
       if(!Number.isFinite(x) || !Number.isFinite(y)) continue;
       if(x<0||x>w-1||y<0||y>h-1) continue;
       const x0 = Math.floor(x), y0 = Math.floor(y);
@@ -2130,13 +2401,18 @@
 
     const scaleX = baseScaleX() * cam2D.zoom;
     const scaleY = baseScaleY() * cam2D.zoom;
-    const drawX = PAD + innerW()*0.5 + (X_MIN - cam2D.cx) * scaleX;
-    const drawY = PAD + innerH()*0.5 + (Y_MIN - cam2D.cy) * scaleY;
-    const drawW = WORLD_W * scaleX;
-    const drawH = WORLD_H * scaleY;
+    const b = baseBounds();
+    const worldW = b.xMax - b.xMin;
+    const worldH = b.yMax - b.yMin;
+    const drawX = PAD + innerW()*0.5 + (b.xMin - cam2D.cx) * scaleX;
+    const drawY = PAD + innerH()*0.5 + (b.yMin - cam2D.cy) * scaleY;
+    const drawW = worldW * scaleX;
+    const drawH = worldH * scaleY;
 
     ctx.save();
-    const pts = makeFovPoints(detRange>0?detRange:MAX_RANGE);
+    const maxR = fovMaxRange();
+    const rDet = detRange>0 ? Math.min(detRange, maxR) : maxR;
+    const pts = makeFovPoints(rDet, installMode);
     ctx.beginPath();
     ctx.moveTo(toPxX(pts[0].x), toPxY(pts[0].y));
     for(let i=1;i<pts.length;i++){
@@ -2292,22 +2568,33 @@
   }
 
   function drawFov3D(range,lighter=false){
-    const r = Math.max(0, Math.min(MAX_RANGE, range|0));
+    const maxR = fovMaxRange();
+    const r = Math.max(0, Math.min(maxR, range|0));
     if(!r) return;
 
-    const half = FOV_DEG/2;
     const rad  = Math.PI/180;
 
     const pts=[];
-    pts.push({x:0,y:0,z:0});
-    for(let a=-half; a<=half; a+=3){
-      pts.push({
-        x: r*Math.sin(a*rad),
-        y: 0,
-        z: r*Math.cos(a*rad)
-      });
+    if(installMode==='top'){
+      for(let a=0; a<=360; a+=3){
+        pts.push({
+          x: r*Math.sin(a*rad),
+          y: 0,
+          z: r*Math.cos(a*rad)
+        });
+      }
+    }else{
+      const half = FOV_DEG/2;
+      pts.push({x:0,y:0,z:0});
+      for(let a=-half; a<=half; a+=3){
+        pts.push({
+          x: r*Math.sin(a*rad),
+          y: 0,
+          z: r*Math.cos(a*rad)
+        });
+      }
+      pts.push({x:0,y:0,z:0});
     }
-    pts.push({x:0,y:0,z:0});
 
     ctx.save();
 
@@ -2324,6 +2611,60 @@
       ctx.globalAlpha=lighter?0.10:0.18;
       ctx.fillStyle=cssVar('--fov');
       ctx.fill();
+    }
+
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
+  function drawFovGuides3D(){
+    const maxR=fovMaxRange();
+    if(maxR<=0) return;
+    ctx.save();
+    ctx.lineWidth=Math.max(1, hairline()*1);
+    ctx.strokeStyle=cssVar('--fov')||'#1e2431';
+    ctx.globalAlpha=0.25;
+
+    function strokeArc(range){
+      const pts=makeFovArcPoints(range, installMode);
+      if(pts.length<2) return;
+      ctx.beginPath();
+      let first=true;
+      for(const p of pts){
+        const proj=project3D(p.x,0,p.y);
+        if(!proj) continue;
+        if(first){ ctx.moveTo(proj.x,proj.y); first=false; }
+        else ctx.lineTo(proj.x,proj.y);
+      }
+      if(!first && installMode==='top') ctx.closePath();
+      if(!first) ctx.stroke();
+    }
+
+    for(let r=GRID;r<=maxR;r+=GRID){
+      strokeArc(r);
+    }
+
+    function strokeLine3D(a,b){
+      const pa=project3D(a.x,a.y,a.z);
+      const pb=project3D(b.x,b.y,b.z);
+      if(!pa || !pb) return;
+      ctx.beginPath();
+      ctx.moveTo(pa.x,pa.y);
+      ctx.lineTo(pb.x,pb.y);
+      ctx.stroke();
+    }
+
+    if(installMode==='top'){
+      strokeLine3D({x:-maxR,y:0,z:0},{x:maxR,y:0,z:0});
+      strokeLine3D({x:0,y:0,z:-maxR},{x:0,y:0,z:maxR});
+    }else{
+      const half=FOV_DEG/2;
+      for(const a of [-half, 0, half]){
+        const ang=a * Math.PI/180;
+        const x=Math.sin(ang)*maxR;
+        const z=Math.cos(ang)*maxR;
+        strokeLine3D({x:0,y:0,z:0},{x,y:0,z});
+      }
     }
 
     ctx.globalAlpha=1;
@@ -2359,8 +2700,9 @@
 
   function sensorHandleWorld(sensor){
     if(!sensor) return null;
+    const mode=sensorInstallMode(sensor);
     const ang = sensorAngle(sensor);
-    const r = MAX_RANGE;
+    const r = sensorFovRange(sensor, mode);
     return {
       x: sensor.x - Math.sin(ang)*r,
       y: sensor.y + Math.cos(ang)*r,
@@ -2472,21 +2814,87 @@
     ctx.globalAlpha=1;
   }
 
+  function drawFloorplanFov2DAt(range, origin, sensor=null, mode='side'){
+    const r=clampFovRange(range, mode);
+    if(!r || !origin) return;
+    const ang=sensorAngle(sensor);
+    const pts=offsetPoints(rotatePoints(makeFovPoints(r, mode), ang), origin);
+    if(!pts.length) return;
+    ctx.beginPath();
+    ctx.moveTo(fpToPxX(pts[0].x), fpToPxY(pts[0].y));
+    for(let i=1;i<pts.length;i++) ctx.lineTo(fpToPxX(pts[i].x), fpToPxY(pts[i].y));
+    ctx.closePath();
+    ctx.globalAlpha=0.18;
+    ctx.fillStyle=cssVar('--fov');
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
+
+  function drawFloorplanFovGuides2DAt(range, origin, sensor=null, mode='side'){
+    const rMax=clampFovRange(range, mode);
+    if(rMax<=0 || !origin) return;
+    const ang=sensorAngle(sensor);
+    ctx.save();
+    ctx.lineWidth=Math.max(1, hairline()*1);
+    ctx.strokeStyle=cssVar('--fov')||'#1e2431';
+    ctx.globalAlpha=0.25;
+
+    for(let r=GRID;r<=rMax;r+=GRID){
+      const pts=offsetPoints(rotatePoints(makeFovArcPoints(r, mode), ang), origin);
+      if(pts.length<2) continue;
+      ctx.beginPath();
+      ctx.moveTo(fpToPxX(pts[0].x), fpToPxY(pts[0].y));
+      for(let i=1;i<pts.length;i++) ctx.lineTo(fpToPxX(pts[i].x), fpToPxY(pts[i].y));
+      if(mode==='top') ctx.closePath();
+      ctx.stroke();
+    }
+
+    if(mode==='top'){
+      const hLine=offsetPoints(rotatePoints([{x:-rMax,y:0},{x:rMax,y:0}], ang), origin);
+      ctx.beginPath();
+      ctx.moveTo(alignPx(fpToPxX(hLine[0].x)), alignPx(fpToPxY(hLine[0].y)));
+      ctx.lineTo(alignPx(fpToPxX(hLine[1].x)), alignPx(fpToPxY(hLine[1].y)));
+      ctx.stroke();
+
+      const vLine=offsetPoints(rotatePoints([{x:0,y:-rMax},{x:0,y:rMax}], ang), origin);
+      ctx.beginPath();
+      ctx.moveTo(alignPx(fpToPxX(vLine[0].x)), alignPx(fpToPxY(vLine[0].y)));
+      ctx.lineTo(alignPx(fpToPxX(vLine[1].x)), alignPx(fpToPxY(vLine[1].y)));
+      ctx.stroke();
+    }else{
+      const ox=alignPx(fpToPxX(origin.x)), oy=alignPx(fpToPxY(origin.y));
+      const half=FOV_DEG/2;
+      for(const a of [-half, 0, half]){
+        const angR=a * Math.PI/180;
+        const x=Math.sin(angR)*rMax;
+        const y=Math.cos(angR)*rMax;
+        const end=offsetPoints(rotatePoints([{x,y}], ang), origin)[0];
+        ctx.beginPath();
+        ctx.moveTo(ox,oy);
+        ctx.lineTo(alignPx(fpToPxX(end.x)), alignPx(fpToPxY(end.y)));
+        ctx.stroke();
+      }
+    }
+
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
   function drawSingleSensorOverlay2D(sensor){
     if(!sensor) return;
     const origin = {x:sensor.x,y:sensor.y};
     const ang = sensorAngle(sensor);
-    const sDet = sensorDetRange(sensor);
     const sZones = sensorZones(sensor);
     const activeDeviceId = placementDevice()?.device_id || selectedDevice?.device_id || null;
     const live = livePosFor(sensor.device_id);
-    const baseColor = cssVar('--fov');
-    const targetR = wallHandleRadius();
-    const maxPts = offsetPoints(rotatePoints(makeFovPoints(MAX_RANGE), ang), origin);
-    drawFloorplanPoly2D(maxPts,{fill:baseColor, stroke:null, fillAlpha:0.18});
-    if(sDet>0 && sDet<MAX_RANGE){
-      const detPts = offsetPoints(rotatePoints(makeFovPoints(sDet), ang), origin);
-      drawFloorplanPoly2D(detPts,{fill:baseColor, stroke:null, fillAlpha:0.10});
+    const mode=sensorInstallMode(sensor);
+    const targetR = floorplanTargetRadius();
+    const fovRange=sensorFovRange(sensor, mode);
+    if(shouldShowFloorplanFov() && fovRange>0){
+      ctx.save();
+      drawFloorplanFov2DAt(fovRange, origin, sensor, mode);
+      drawFloorplanFovGuides2DAt(fovRange, origin, sensor, mode);
+      ctx.restore();
     }
     const isActiveSensor = activeDeviceId && sensor?.device_id === activeDeviceId;
     for(const key of ['1','2','3','excl']){
@@ -2497,7 +2905,7 @@
     }
     const color = WALL_COLOR;
     const r = targetR;
-    for (const n of [1, 2, 3]) {
+    for (const n of [1, 2, 3, 4, 5]) {
       const p = live[n];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x === 0 && p.y === 0)) continue;
       const rot = rotatePoints([{x:p.x,y:p.y}], ang)[0];
@@ -2512,9 +2920,6 @@
       ctx.fill();
     }
     ctx.globalAlpha=1;
-    if(activeDeviceId && sensor.device_id===activeDeviceId){
-      syncActiveSensorState();
-    }
     if(floorplanTool==='zone' && activeDeviceId && sensor.device_id===activeDeviceId && currentZone){
       const style = zoneStyle(currentZone,true);
       const pts = offsetPoints(rotatePoints(sZones[currentZone], ang), origin);
@@ -2545,37 +2950,54 @@
     if(!sensors.length) return;
     for(const sensor of sensors){
       const origin = {x:sensor.x, y:sensor.y};
-      const sDet = sensorDetRange(sensor);
-      drawFov3DAt(MAX_RANGE, origin, false, sensor);
-      if(sDet>0 && sDet<MAX_RANGE){
-        drawFov3DAt(sDet, origin, true, sensor);
+      const mode=sensorInstallMode(sensor);
+      const fovRange=sensorFovRange(sensor, mode);
+      if(shouldShowFloorplanFov() && fovRange>0){
+        ctx.save();
+        drawFov3DAt(fovRange, origin, false, sensor, mode);
+        drawFovGuides3DAt(fovRange, origin, sensor, mode);
+        ctx.restore();
       }
       drawFloorplanZones3D(origin, sensor);
       drawFloorplanTargets3D(origin, sensor);
     }
   }
 
-  function drawFov3DAt(range, origin, lighter=false, sensor=null){
-    const r = Math.max(0, Math.min(MAX_RANGE, range|0));
+  function drawFov3DAt(range, origin, lighter=false, sensor=null, mode='side'){
+    const r = clampFovRange(range, mode);
     if(!r || !origin) return;
-    const half = FOV_DEG/2;
     const rad  = Math.PI/180;
     const ang = sensorAngle(sensor);
     const cosA=Math.cos(ang), sinA=Math.sin(ang);
     const pts=[];
-    pts.push({x:origin.x,y:0,z:origin.y});
-    for(let a=-half; a<=half; a+=3){
-      const lx = r*Math.sin(a*rad);
-      const lz = r*Math.cos(a*rad);
-      const rx = lx*cosA - lz*sinA;
-      const rz = lx*sinA + lz*cosA;
-      pts.push({
-        x: origin.x + rx,
-        y: 0,
-        z: origin.y + rz
-      });
+    if(mode==='top'){
+      for(let a=0; a<=360; a+=3){
+        const lx = r*Math.sin(a*rad);
+        const lz = r*Math.cos(a*rad);
+        const rx = lx*cosA - lz*sinA;
+        const rz = lx*sinA + lz*cosA;
+        pts.push({
+          x: origin.x + rx,
+          y: 0,
+          z: origin.y + rz
+        });
+      }
+    }else{
+      const half = FOV_DEG/2;
+      pts.push({x:origin.x,y:0,z:origin.y});
+      for(let a=-half; a<=half; a+=3){
+        const lx = r*Math.sin(a*rad);
+        const lz = r*Math.cos(a*rad);
+        const rx = lx*cosA - lz*sinA;
+        const rz = lx*sinA + lz*cosA;
+        pts.push({
+          x: origin.x + rx,
+          y: 0,
+          z: origin.y + rz
+        });
+      }
+      pts.push({x:origin.x,y:0,z:origin.y});
     }
-    pts.push({x:origin.x,y:0,z:origin.y});
 
     const baseColor = cssVar('--fov') || '#e6eaf1';
     ctx.save();
@@ -2593,6 +3015,71 @@
       ctx.fillStyle=baseColor;
       ctx.fill();
     }
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
+  function drawFovGuides3DAt(range, origin, sensor=null, mode='side'){
+    const rMax=clampFovRange(range, mode);
+    if(rMax<=0 || !origin) return;
+    const ang=sensorAngle(sensor);
+    const cosA=Math.cos(ang), sinA=Math.sin(ang);
+    ctx.save();
+    ctx.lineWidth=Math.max(1, hairline()*1);
+    ctx.strokeStyle=cssVar('--fov')||'#1e2431';
+    ctx.globalAlpha=0.25;
+
+    function toWorld(p){
+      const rx=p.x*cosA - p.y*sinA;
+      const rz=p.x*sinA + p.y*cosA;
+      return {x: origin.x + rx, y: 0, z: origin.y + rz};
+    }
+
+    function strokeArc(range){
+      const pts=makeFovArcPoints(range, mode);
+      if(pts.length<2) return;
+      ctx.beginPath();
+      let first=true;
+      for(const p of pts){
+        const w=toWorld(p);
+        const proj=project3D(w.x,w.y,w.z);
+        if(!proj) continue;
+        if(first){ ctx.moveTo(proj.x,proj.y); first=false; }
+        else ctx.lineTo(proj.x,proj.y);
+      }
+      if(!first && mode==='top') ctx.closePath();
+      if(!first) ctx.stroke();
+    }
+
+    for(let r=GRID;r<=rMax;r+=GRID){
+      strokeArc(r);
+    }
+
+    function strokeLine3D(a,b){
+      const wa=toWorld(a);
+      const wb=toWorld(b);
+      const pa=project3D(wa.x,wa.y,wa.z);
+      const pb=project3D(wb.x,wb.y,wb.z);
+      if(!pa || !pb) return;
+      ctx.beginPath();
+      ctx.moveTo(pa.x,pa.y);
+      ctx.lineTo(pb.x,pb.y);
+      ctx.stroke();
+    }
+
+    if(mode==='top'){
+      strokeLine3D({x:-rMax,y:0},{x:rMax,y:0});
+      strokeLine3D({x:0,y:-rMax},{x:0,y:rMax});
+    }else{
+      const half=FOV_DEG/2;
+      for(const a of [-half, 0, half]){
+        const angR=a * Math.PI/180;
+        const x=Math.sin(angR)*rMax;
+        const y=Math.cos(angR)*rMax;
+        strokeLine3D({x:0,y:0},{x,y});
+      }
+    }
+
     ctx.globalAlpha=1;
     ctx.restore();
   }
@@ -2634,7 +3121,7 @@
       faces.push({ proj, depth });
     }
 
-    for (const n of [1, 2, 3]) {
+    for (const n of [1, 2, 3, 4, 5]) {
       const p = live[n];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
       if (p.x === 0 && p.y === 0) continue;
@@ -2708,13 +3195,10 @@
 
     ctx.restore();
 
-    if(sensor?.device_id===selectedDevice?.device_id){
-      syncActiveSensorState();
-    }
   }
 
 
-  function softFovFactor(x,z,range){
+  function softFovFactor(x,z,range,mode='side'){
     const r = Math.hypot(x,z);
     const ang = Math.atan2(x,z);
     const half = FOV_RAD * 0.5;
@@ -2733,9 +3217,13 @@
     }
 
     let fAng;
-    if(absA <= half - bandA)    fAng = 1;
-    else if(absA >= half)       fAng = 0;
-    else {
+    if(mode==='top'){
+      fAng = 1;
+    }else if(absA <= half - bandA){
+      fAng = 1;
+    }else if(absA >= half){
+      fAng = 0;
+    }else{
       const t = (half - absA) / bandA;
       fAng = smoothstep01(t);
     }
@@ -2746,26 +3234,27 @@
   function softWorldFactor(x,z){
     const band = 30;
     let fx = 1, fz = 1;
+    const b = baseBounds();
 
-    if(x <= X_MIN) return 0;
-    if(x < X_MIN + band){
-      const t = (x - X_MIN) / band;
+    if(x <= b.xMin) return 0;
+    if(x < b.xMin + band){
+      const t = (x - b.xMin) / band;
       fx *= smoothstep01(t);
     }
-    if(x >= X_MAX) return 0;
-    if(x > X_MAX - band){
-      const t = (X_MAX - x) / band;
+    if(x >= b.xMax) return 0;
+    if(x > b.xMax - band){
+      const t = (b.xMax - x) / band;
       fx *= smoothstep01(t);
     }
 
-    if(z <= Y_MIN) return 0;
-    if(z < Y_MIN + band){
-      const t = (z - Y_MIN) / band;
+    if(z <= b.yMin) return 0;
+    if(z < b.yMin + band){
+      const t = (z - b.yMin) / band;
       fz *= smoothstep01(t);
     }
-    if(z >= Y_MAX) return 0;
-    if(z > Y_MAX - band){
-      const t = (Y_MAX - z) / band;
+    if(z >= b.yMax) return 0;
+    if(z > b.yMax - band){
+      const t = (b.yMax - z) / band;
       fz *= smoothstep01(t);
     }
 
@@ -2773,8 +3262,11 @@
   }
 
   function sampleFieldAt(arr, w, h, worldX, worldZ){
-    let u = (worldX - X_MIN) / WORLD_W;
-    let v = (worldZ - Y_MIN) / WORLD_H;
+    const b = baseBounds();
+    const worldW = b.xMax - b.xMin;
+    const worldH = b.yMax - b.yMin;
+    let u = (worldX - b.xMin) / worldW;
+    let v = (worldZ - b.yMin) / worldH;
     if(u<0||u>1||v<0||v>1) return 0;
     const x = u*(w-1);
     const y = v*(h-1);
@@ -2805,17 +3297,21 @@
     const gh = Math.max(2, Math.floor(h * scale));
 
     const vertices = Array.from({length:gh}, ()=>Array(gw));
-    const rDet = detRange>0 ? detRange : MAX_RANGE;
+    const maxR = fovMaxRange();
+    const rDet = detRange>0 ? Math.min(detRange, maxR) : maxR;
+    const b = baseBounds();
+    const worldW = b.xMax - b.xMin;
+    const worldH = b.yMax - b.yMin;
 
     for(let gy=0; gy<gh; gy++){
-      const vz = Y_MIN + (gy/(gh-1))*WORLD_H;
+      const vz = b.yMin + (gy/(gh-1))*worldH;
       for(let gx=0; gx<gw; gx++){
-        const vx = X_MIN + (gx/(gw-1))*WORLD_W;
+        const vx = b.xMin + (gx/(gw-1))*worldW;
 
         const baseColor  = sampleFieldAt(color , w, h, vx, vz);
         let   baseHeight = baseColor>0 ? sampleFieldAt(height, w, h, vx, vz) : 0;
 
-        const fFov   = softFovFactor(vx, vz, rDet);
+        const fFov   = softFovFactor(vx, vz, rDet, installMode);
         const fWorld = softWorldFactor(vx, vz);
         const f      = fFov * fWorld;
 
@@ -3371,13 +3867,13 @@ HUMAN_TRIANGLES = [
       faces.push({ proj, depth });
     }
 
-    for (const n of [1, 2, 3]) {
+    for (const n of [1, 2, 3, 4, 5]) {
       const p = live[n];
       if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
       if (p.x === 0 && p.y === 0) continue;
 
-      const wx = clamp(p.x, X_MIN, X_MAX);
-      const wz = clamp(p.y, Y_MIN, Y_MAX);
+      const wx = clampBaseX(p.x);
+      const wz = clampBaseY(p.y);
 
       const angleRad = Number.isFinite(p.heading) ? p.heading : 0;
       const cosA = Math.cos(angleRad);
@@ -3443,29 +3939,30 @@ HUMAN_TRIANGLES = [
     ctx.restore();
 
     updateCamera3D(FLOORPLAN_BOUNDS);
-    drawGrid3D(FLOORPLAN_BOUNDS, GRID);
+    if(shouldShowFloorplanGrid()) drawGrid3D(FLOORPLAN_BOUNDS, GRID);
     drawFloorplanWalls3D();
     drawFloorplanSensorOverlay3D();
   }
 
   function drawScene3D(){
     ctx.save();
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#0a0d12'; 
-    ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
-    ctx.restore();
+ctx.setTransform(dpr,0,0,dpr,0,0);
+ctx.globalCompositeOperation = 'source-over';
+ctx.globalAlpha = 1;
+ctx.fillStyle = '#0a0d12';
+ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
+ctx.restore();
 
     updateCamera3D();
-    drawGrid3D();
-    drawFov3D(MAX_RANGE,false);
-    if(detRange>0 && detRange<MAX_RANGE){
+    const maxR = fovMaxRange();
+    drawFov3D(maxR,false);
+    if(detRange>0 && detRange<maxR){
       drawFov3D(detRange,true);
     }
     if(viewMode === 'heatmap'){
       drawHeatmap3D();
     }
+    drawFovGuides3D();
     drawZones3D();
     drawTargets3D();
   }
@@ -3473,7 +3970,7 @@ HUMAN_TRIANGLES = [
   let drawQueued=false;
   function enqueueDraw(){
     if(drawQueued) return;
-    syncActiveSensorState();
+    if(!floorplanEnabled) syncActiveSensorState();
     drawQueued=true;
     requestAnimationFrame(()=>{ drawQueued=false; draw(); });
   }
@@ -3483,9 +3980,10 @@ HUMAN_TRIANGLES = [
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#0a0d12'; 
+    ctx.fillStyle = '#0a0d12';
     ctx.fillRect(0, 0, cvs.width / dpr, cvs.height / dpr);
     ctx.restore();
+
 
     if(floorplanEnabled){
       if(viewDim === '3d') drawFloorplan3D();
@@ -3493,12 +3991,13 @@ HUMAN_TRIANGLES = [
     } else if(viewDim === '3d'){
       drawScene3D();
     } else {
-      drawGrid();
-      drawFov(MAX_RANGE,false);
-      if(detRange>0&&detRange<MAX_RANGE) drawFov(detRange,true);
+      const maxR = fovMaxRange();
+      drawFov(maxR,false);
+      if(detRange>0&&detRange<maxR) drawFov(detRange,true);
       if(viewMode === 'heatmap'){
         drawHeatmap2D();
       }
+      drawFovGuides2D();
       for(const key of ['1','2','3','excl']){
         const active = currentZone && key===currentZone;
         const style=zoneStyle(key,active);
@@ -3830,7 +4329,7 @@ HUMAN_TRIANGLES = [
       if(button===0){
         const dev = placementDevice();
         if(!dev){
-          setError('Sensor placement failed');
+          reportError('Sensor placement failed');
           return;
         }
         pushFloorplanHistory();
@@ -3853,7 +4352,7 @@ HUMAN_TRIANGLES = [
   function handleFloorplanZoneDown(px,py,shiftKey=false,button=0){
     const sensor = activeFloorplanSensor();
     if(!sensor){
-      setError('Zone is not valid');
+      reportError('Zone is not valid');
       return;
     }
     if(!zones[currentZone]) zones[currentZone]=[];
@@ -3887,8 +4386,8 @@ HUMAN_TRIANGLES = [
       if(edge.idx>=0){
         const local=floorplanLocalFromPx(px,py,sensor);
         const p={
-          x:Math.round(clamp(local.x,X_MIN,X_MAX)),
-          y:Math.round(clamp(local.y,Y_MIN,Y_MAX))
+          x:Math.round(local.x),
+          y:Math.round(local.y)
         };
         const insertAt=edge.idx+1;
         pushFloorplanHistory();
@@ -3914,8 +4413,8 @@ HUMAN_TRIANGLES = [
     const local=floorplanLocalFromPx(px,py,sensor);
     const wasEmpty = pts.length === 0;
     pts.push({
-      x:Math.round(clamp(local.x,X_MIN,X_MAX)),
-      y:Math.round(clamp(local.y,Y_MIN,Y_MAX))
+      x:Math.round(local.x),
+      y:Math.round(local.y)
     });
     pushFloorplanHistory();
     syncActiveFloorplanSensorZones();
@@ -3968,29 +4467,22 @@ HUMAN_TRIANGLES = [
       const prev=floorplanLocalFromPx(floorplanZoneLastPX,floorplanZoneLastPY,sensor);
       const dx=curr.x - prev.x;
       const dy=curr.y - prev.y;
-      let canMove=true;
-      for(const p of pts){
-        const nx=clamp(p.x+dx,X_MIN,X_MAX);
-        const ny=clamp(p.y+dy,Y_MIN,Y_MAX);
-        if(nx!==p.x+dx || ny!==p.y+dy){ canMove=false; break; }
+      const next=pts.map(p=>({x:p.x+dx, y:p.y+dy}));
+      for(let i=0;i<pts.length;i++){
+        pts[i]=next[i];
       }
-      if(canMove){
-        for(let i=0;i<pts.length;i++){
-          pts[i]={x:pts[i].x+dx,y:pts[i].y+dy};
-        }
-        floorplanZoneLastPX=px;
-        floorplanZoneLastPY=py;
-        syncActiveFloorplanSensorZones();
-        enqueueDraw();
-      }
+      floorplanZoneLastPX=px;
+      floorplanZoneLastPY=py;
+      syncActiveFloorplanSensorZones();
+      enqueueDraw();
       return;
     }
 
     if(floorplanZoneDragIdx!=null){
       const local=floorplanLocalFromPx(px,py,sensor);
       pts[floorplanZoneDragIdx]={
-        x:Math.round(clamp(local.x,X_MIN,X_MAX)),
-        y:Math.round(clamp(local.y,Y_MIN,Y_MAX))
+        x:Math.round(local.x),
+        y:Math.round(local.y)
       };
       syncActiveFloorplanSensorZones();
       enqueueDraw();
@@ -4074,6 +4566,107 @@ HUMAN_TRIANGLES = [
     else enqueueDraw();
   }
 
+  function resetFloorplanSelectionAndModes(){
+    clearZoneSelection();
+    setFloorplanTool('view');
+    floorplanActiveLine=null;
+    floorplanPreview=null;
+    floorplanPreviewSuppressed=false;
+    floorplanLengthInput='';
+    floorplanDragMode=null;
+    floorplanSensorHover=null;
+    floorplanSensorDragging=null;
+    floorplanSensorRotating=null;
+    floorplanZoneDragIdx=null;
+    floorplanZoneDragWhole=false;
+    floorplanZoneLastPX=0;
+    floorplanZoneLastPY=0;
+  }
+
+  function readNumberBySuffixFrom(list, suffix){
+    const e=list?.find(x=>x.entity_id?.endsWith(suffix));
+    if(!e) return null;
+    const v=(typeof e.state==='number')?e.state:Number(e.state);
+    return Number.isFinite(v)?v:null;
+  }
+
+  function detectInstallModeFromEntities(list){
+    const match=list?.find(x=>x.entity_id?.includes('radar_installation_method'));
+    const state=(match?.state ?? '').toString().trim().toLowerCase();
+    return normalizeInstallModeValue(state);
+  }
+
+  function zonesFromEntities(list){
+    let hasData=false;
+    const next={'1':[],'2':[],'3':[],'excl':[]};
+    for(const z of ['1','2','3','excl']){
+      const id=zid(z);
+      const rawCount=readNumberBySuffixFrom(list,id.count);
+      if(rawCount!==null) hasData=true;
+      const n=Math.max(0,Math.min(MAX_POINTS,Math.round(rawCount||0)));
+      const pts=[];
+      for(let i=1;i<=n;i++){
+        const x=readNumberBySuffixFrom(list,id.x(i));
+        const y=readNumberBySuffixFrom(list,id.y(i));
+        pts.push({
+          x: Number.isFinite(x) ? x : 0,
+          y: Number.isFinite(y) ? y : 0
+        });
+      }
+      next[z]=pts;
+    }
+    return {zones: next, hasData};
+  }
+
+  async function refreshAllFloorplanSensorsFromHA(){
+    if(!floorplanSensors.length) return;
+    const sensorById=new Map();
+    floorplanSensors.forEach(s=>{
+      if(s?.device_id && !sensorById.has(s.device_id)) sensorById.set(s.device_id, s);
+    });
+    const ids=[...sensorById.keys()];
+    if(!ids.length) return;
+    const results=await Promise.allSettled(
+      ids.map(deviceId=>api('api/device_entities',{device_id:deviceId},{reloadOnError:false}))
+    );
+    const updates=new Map();
+    results.forEach((res, idx)=>{
+      if(res.status!=='fulfilled') return;
+      const deviceId=ids[idx];
+      let arr=[];
+      try{
+        arr=Array.isArray(res.value)?res.value:JSON.parse(res.value||'[]');
+      }catch(_e){
+        return;
+      }
+      const list=arr.map(e=>({entity_id:e.entity_id,domain:e.domain,state:e.state,attributes:e.attributes||{}}));
+      const existing=sensorById.get(deviceId);
+      const fallbackMode=existing ? sensorInstallMode(existing) : 'side';
+      const mode=detectInstallModeFromEntities(list) || fallbackMode;
+      let v=null;
+      for(const suffix of rangeSuffixesForMode(mode)){
+        v=readNumberBySuffixFrom(list, suffix);
+        if(v!==null) break;
+      }
+      const existingRange=Number.isFinite(Number(existing?.detRange)) ? Number(existing.detRange) : MAX_RANGE;
+      const det=Math.round(Math.max(Y_MIN,Math.min(MAX_RANGE,v??existingRange)));
+      const parsedZones=zonesFromEntities(list);
+      const zones=parsedZones.hasData ? parsedZones.zones : (existing?.zones || emptyZones());
+      updates.set(deviceId, {install_mode: mode, detRange: det, zones});
+    });
+    if(!updates.size) return;
+    floorplanSensors = floorplanSensors.map(s=>{
+      const data=updates.get(s.device_id);
+      if(!data) return s;
+      return {
+        ...s,
+        install_mode: data.install_mode,
+        detRange: data.detRange,
+        zones: data.zones
+      };
+    });
+  }
+
   async function loadFloorplanFromHA(){
     floorplanPolylines=[];
     floorplanActiveLine=null;
@@ -4112,32 +4705,36 @@ HUMAN_TRIANGLES = [
           floorplanSensors = parsed.sensors.map(clampSensorPos);
         }else if(parsed.sensor){
           const s=parsed.sensor;
-          floorplanSensors=[clampSensorPos({
+          const single=clampSensorPos({
             x:s.x, y:s.y, angle:s.angle,
             device_id: s.device_id||s.deviceId||'',
             name: s.name||'',
-            model: s.model||''
-          })];
+            model: s.model||'',
+            install_mode: s.install_mode ?? s.installMode ?? s.mount_mode ?? s.mountMode ?? s.mode
+          });
+          floorplanSensors=[single];
         }
+        await refreshAllFloorplanSensorsFromHA();
         const lastDev=floorplanSensors[floorplanSensors.length-1]?.device_id||'';
         if(floorplanDeviceSel && lastDev){
           floorplanDeviceSel.value = lastDev;
         }
       }
+      resetFloorplanSelectionAndModes();
       pushFloorplanHistory();
       floorplanWallsDirty=false;
       applyFloorplanAutoFit({resetAngles:viewDim==='3d'});
       enqueueDraw();
       return true;
     }catch(e){
-      setError(e?.message || 'No data available');
+      reportError(e?.message || 'No data available');
       return false;
     }
   }
 
   async function saveFloorplanToHA(){
     if(!selectedFloorId){
-      setError('Save failed');
+      reportError('Save failed');
       return;
     }
     try{
@@ -4154,9 +4751,13 @@ HUMAN_TRIANGLES = [
       if(!r.ok){
         throw new Error(text||`${r.status} ${r.statusText}`);
       }
-      if(sensorsOk) setSaved();
+      if(sensorsOk){
+        resetFloorplanSelectionAndModes();
+        enqueueDraw();
+        setSaved();
+      }
     }catch(e){
-      setError(e?.message || 'Save failed');
+      reportError(e?.message || 'Save failed');
     }
   }
   function setCurrentZone(z){
@@ -4180,6 +4781,7 @@ HUMAN_TRIANGLES = [
     if(prevTool === 'draw' && mode !== 'draw'){
       applyFloorplanAutoFit();
     }
+    if(mode==='view') setReady();
   }
 
   function cancelFloorplanTool(){
@@ -4244,7 +4846,7 @@ HUMAN_TRIANGLES = [
 
     if(floorplanEnabled){
       if(!selectedFloorId){
-        setError('No data available');
+        reportError('No data available');
         return;
       }
       if(IS_MOBILE){
@@ -4373,10 +4975,7 @@ HUMAN_TRIANGLES = [
       const edge=nearestEdge(px,py);
       if(edge.idx>=0){
         const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
-        const p={
-          x:clamp(x,X_MIN,X_MAX),
-          y:clamp(y,Y_MIN,Y_MAX)
-        };
+        const p={x,y};
         const insertAt=edge.idx+1;
         pts.splice(insertAt,0,p);
         dragIdx=insertAt;
@@ -4398,7 +4997,7 @@ HUMAN_TRIANGLES = [
     if(pts.length>=MAX_POINTS) return;
     const x=Math.round(toCmX(px)), y=Math.round(toCmY(py));
     pushFloorplanHistory();
-    pts.push({x:clamp(x,X_MIN,X_MAX),y:clamp(y,Y_MIN,Y_MAX)});
+    pts.push({x,y});
     enqueueDraw();
 
   }
@@ -4480,26 +5079,20 @@ HUMAN_TRIANGLES = [
       const dx=toCmX(px)-toCmX(lastPX);
       const dy=toCmY(py)-toCmY(lastPY);
       const pts=zones[currentZone];
-      let canMove=true;
-      for(const p of pts){
-        const nx=clamp(p.x+dx,X_MIN,X_MAX);
-        const ny=clamp(p.y+dy,Y_MIN,Y_MAX);
-        if(nx!==p.x+dx||ny!==p.y+dy){ canMove=false; break; }
+      const next=pts.map(p=>({x:p.x+dx, y:p.y+dy}));
+      for(let i=0;i<pts.length;i++){
+        pts[i]=next[i];
       }
-      if(canMove){
-        for(let i=0;i<pts.length;i++){
-          pts[i]={x:pts[i].x+dx,y:pts[i].y+dy};
-        }
-        lastPX=px;
-        lastPY=py;
-        enqueueDraw();
-      }
+      lastPX=px;
+      lastPY=py;
+      enqueueDraw();
       return;
     }
     const pts=zones[currentZone];
+    const c={x:toCmX(px), y:toCmY(py)};
     pts[dragIdx]={
-      x:Math.round(clamp(toCmX(px),X_MIN,X_MAX)),
-      y:Math.round(clamp(toCmY(py),Y_MIN,Y_MAX))
+      x:Math.round(c.x),
+      y:Math.round(c.y)
     };
     enqueueDraw();
   }
@@ -4740,7 +5333,7 @@ HUMAN_TRIANGLES = [
       const zoneId = btn.dataset.zone;
       const dev = placementDevice() || selectedDevice;
       if(!dev){
-        setError('No data available');
+        reportError('No data available');
         return;
       }
       setCurrentZone(zoneId);
@@ -4848,7 +5441,9 @@ HUMAN_TRIANGLES = [
     const targetEntityIds=entities.filter(e=>
       e.entity_id.endsWith('target_1_x')||e.entity_id.endsWith('target_1_y')||
       e.entity_id.endsWith('target_2_x')||e.entity_id.endsWith('target_2_y')||
-      e.entity_id.endsWith('target_3_x')||e.entity_id.endsWith('target_3_y')
+      e.entity_id.endsWith('target_3_x')||e.entity_id.endsWith('target_3_y')||
+      e.entity_id.endsWith('target_4_x')||e.entity_id.endsWith('target_4_y')||
+      e.entity_id.endsWith('target_5_x')||e.entity_id.endsWith('target_5_y')
     ).map(e=>e.entity_id);
     const hours=Number(heatmapHoursSel.value);
     setLoadingHeatmap();
@@ -4861,7 +5456,8 @@ HUMAN_TRIANGLES = [
       heatmapPositions=[];
       heatmapFieldColor=null;
       heatmapFieldHeight=null;
-      setError(e?.message || 'No data available');
+      reportError(e?.message || 'No data available');
+      setReady();
       return false;
     }
   }
@@ -4941,13 +5537,13 @@ HUMAN_TRIANGLES = [
       try{
         await loadFloorsCore();
         if(!floorsList.length){
-          setError('No data available');
+          reportError('No data available');
         }else{
           const loaded = await loadFloorplanFromHA();
           if(loaded) setReady();
         }
       }catch(e){
-        setError(e?.message || 'No data available');
+        reportError(e?.message || 'No data available');
       }
     }
     showDeviceSelector();
@@ -4976,6 +5572,19 @@ HUMAN_TRIANGLES = [
   }));
 
   legendSigmaBtns.forEach(btn=>{
+    const clearPressed=()=>{
+      btn.classList.remove('active');
+    };
+    btn.addEventListener('pointerdown',e=>{
+      btn.classList.add('active');
+      if(btn.setPointerCapture) btn.setPointerCapture(e.pointerId);
+    });
+    btn.addEventListener('pointerup',e=>{
+      clearPressed();
+      if(btn.releasePointerCapture) btn.releasePointerCapture(e.pointerId);
+    });
+    btn.addEventListener('pointerleave',clearPressed);
+    btn.addEventListener('pointercancel',clearPressed);
     btn.addEventListener('click',()=>{
       const op = btn.dataset.op;
       const step = 0.2;
@@ -4987,9 +5596,6 @@ HUMAN_TRIANGLES = [
       }else if(op === 'plus'){
         TUNE.sigmaScale = clamp(TUNE.sigmaScale + step, minSigma, maxSigma);
       }
-
-      legendSigmaBtns.forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
 
       heatmapFieldColor=null;
       heatmapFieldHeight=null;
@@ -5010,6 +5616,13 @@ HUMAN_TRIANGLES = [
   floorplanToolBtns.forEach(btn=>{
     btn.addEventListener('click',()=>{
       const tool=btn.dataset.tool;
+      if(tool==='sensor'){
+        setStatusText('Click to place selected sensor');
+      }else if(tool==='draw'){
+        setStatusText('Click to draw walls');
+      }else if(tool==='zone'){
+        setStatusText('Click to draw zone');
+      }
       if(!floorplanEnabled){
         return;
       }
@@ -5020,30 +5633,21 @@ HUMAN_TRIANGLES = [
       if(tool==='sensor'){
         const dev=placementDevice();
         if(!dev){
-          setError('Sensor placement failed');
-          return;
+          reportError('Sensor placement failed');
         }
         setFloorplanTool('sensor');
-        const hasSensor = floorplanSensors.some(s=>s.device_id===dev.device_id);
-        if(!hasSensor) setStatus('ok', 'Click to place selected sensor');
-        else setReady();
       }else if(tool==='draw'){
         setFloorplanTool('draw');
-        if(floorplanActiveLine===null && !floorplanPolylines.length){
-          setStatus('ok', 'Click to draw walls');
-        }else{
-          setReady();
-        }
       }else if(tool==='zone'){
         const sensor = activeFloorplanSensor();
         if(!sensor){
-          setError('Zone is not valid');
-          return;
+          reportError('Zone is not valid');
+        }
+        if(!currentZone){
+          currentZone='1';
+          zoneBtns.forEach(b=>b.classList.toggle('active', b.dataset.zone==='1'));
         }
         setFloorplanTool('zone');
-        const pts = zones[currentZone] || [];
-        if(!pts.length) setStatus('ok', 'Click to draw zone');
-        else setReady();
       }
     });
   });
@@ -5071,7 +5675,7 @@ HUMAN_TRIANGLES = [
 
   async function handleDeviceSelection(selectEl){
     if(!selectEl || !selectEl.value){
-      setError('No data available');
+      reportError('No data available');
       return;
     }
     selectedDevice={
@@ -5091,11 +5695,11 @@ HUMAN_TRIANGLES = [
     zoneBtns.forEach(b=>b.classList.remove('active'));
     try{
       const loaded = await fetchZonesFromDevice(selectedDevice);
-      if(loaded && !currentZone) setCurrentZone('1');
       if(viewDim === '2d') reset2DCam();
+      else resetOrbitIf3D();
       setReady();
     }catch(e){
-      setError(e?.message || 'No data available');
+      reportError(e?.message || 'No data available');
     }finally{
       syncLayout();
       resumeLive(true);
@@ -5113,7 +5717,7 @@ HUMAN_TRIANGLES = [
       devicesList = list;
       populateDevices(devicesList, initialUiState?.selectedDeviceId || null);
       if(!devicesList.length){
-        setError('No data available');
+        reportError('No data available');
         return;
       }
       selectedDevice={
@@ -5127,7 +5731,7 @@ HUMAN_TRIANGLES = [
       setReady();
       await restoreUiState();
     }catch(e){
-      setError(e?.message || 'No data available');
+      reportError(e?.message || 'No data available');
     }finally{
       const ro=new ResizeObserver(()=>{
         if(resizeScheduled) return;
@@ -5155,7 +5759,7 @@ HUMAN_TRIANGLES = [
     if(floorplanEnabled){
       selectedFloorId = sel.value || null;
       if(!selectedFloorId){
-        setError('No data available');
+        reportError('No data available');
         return;
       }
       persistUiState();
