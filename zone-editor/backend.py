@@ -85,8 +85,7 @@ def device_entities():
   {{% set out.list = out.list + [ {{
     'entity_id': s.entity_id,
     'domain': (s.entity_id.split('.'))[0],
-    'state': s.state,
-    'attributes': (s.attributes | tojson)
+    'state': s.state
   }} ] %}}
 {{% endfor %}}
 {{{{ out.list | tojson }}}}
@@ -223,8 +222,7 @@ def historical_targets():
     {{% set out.list = out.list + [ {{
       'entity_id': s.entity_id,
       'domain': (s.entity_id.split('.'))[0],
-      'state': s.state,
-      'attributes': (s.attributes | tojson)
+      'state': s.state
     }} ] %}}
   {{% endif %}}
 {{% endfor %}}
