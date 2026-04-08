@@ -154,6 +154,7 @@ def floorplan_route():
             stored = store.get(floor_id) or {}
             polylines = stored.get('polylines', [])
             sensors = stored.get('sensors')
+            air = stored.get('air', [])
             if not sensors:
                 legacy = stored.get('sensor')
                 if legacy:
@@ -161,10 +162,11 @@ def floorplan_route():
                 else:
                     sensors = []
             first_sensor = sensors[0] if sensors else None
-            return jsonify({'polylines': polylines, 'sensors': sensors, 'sensor': first_sensor})
+            return jsonify({'polylines': polylines, 'sensors': sensors, 'sensor': first_sensor, 'air': air})
 
         polylines = data.get('polylines', [])
         sensors = data.get('sensors')
+        air = data.get('air', [])
         if sensors is None:
             legacy = data.get('sensor')
             sensors = [legacy] if legacy else []
@@ -174,11 +176,12 @@ def floorplan_route():
                 'floor_id': floor_id,
                 'polylines': polylines,
                 'sensors': sensors,
-                'sensor': sensors[0] if sensors else None
+                'sensor': sensors[0] if sensors else None,
+                'air': air
             }
         }
         store = load_store()
-        store[floor_id] = {'polylines': polylines, 'sensors': sensors}
+        store[floor_id] = {'polylines': polylines, 'sensors': sensors, 'air': air}
         save_ok = save_store(store)
 
         r = ha_post(f'/states/{entity_id}', payload)

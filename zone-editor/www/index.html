@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html> 
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -268,6 +268,15 @@
             </svg>
           </span>
         </button>
+        <button class="view-toggle-btn floorplan-tool-btn icon-only" data-tool="air" aria-label="Air quality tool" aria-pressed="false">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 7 C7 5 9 5 12 7 S17 9 20 7"></path>
+              <path d="M4 12 C7 10 9 10 12 12 S17 14 20 12"></path>
+              <path d="M4 17 C7 15 9 15 12 17 S17 19 20 17"></path>
+            </svg>
+          </span>
+        </button>
       </div>
 
       <div class="floorplan-history" id="floorplanHistory" style="display:none" aria-label="Floorplan history controls">
@@ -390,6 +399,13 @@
   const WORLD_W = X_MAX - X_MIN;
   const WORLD_H = Y_MAX - Y_MIN;
   const MAX_RANGE=600, MAX_POINTS=8, FOV_DEG=120, GRID=100;
+  const AIR_TEXT_ASPECT = 2.5;
+  const AIR_TEXT_HEIGHT_PX = 24;
+  const AIR_TEXT_DESKTOP_MIN_PX = 28;
+  const AIR_TEXT_DESKTOP_MAX_PX = 56;
+  const AIR_TEXT_MOBILE_MIN_PX = 20;
+  const AIR_TEXT_MOBILE_MAX_PX = 40;
+  const AIR_TEXT_MOBILE_SCALE = 0.525;
   const TOP_RANGE=400;
   const BASE_BOUNDS = {xMin:X_MIN, xMax:X_MAX, yMin:Y_MIN, yMax:Y_MAX};
   const TOP_BOUNDS = {xMin:-TOP_RANGE, xMax:TOP_RANGE, yMin:-TOP_RANGE, yMax:TOP_RANGE};
@@ -499,6 +515,11 @@
   let floorplanSensorHover=null;
   let floorplanSensorDragging=null;
   let floorplanSensorRotating=null;
+  let floorplanAirMarkers=[];
+  let floorplanAirHover=null;
+  let floorplanAirDragging=null;
+  let floorplanAirDragOffset=null;
+  const airDataByDevice=new Map();
   let floorplanDragMode=null;
   let floorplanHistory=[];
   let floorplanFuture=[];
@@ -601,7 +622,9 @@
 
   const BOOT_KEY='sensy_boot_reloaded_once';
   let liveTimer=null, livePauseDepth=0, liveInFlight=false;
+  let airTimer=null, airPauseDepth=0, airInFlight=false;
   const LIVE_INTERVAL_MS=30;
+  const AIR_INTERVAL_MS=1000;
 
   const cssVar=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const uiScale=()=>parseFloat(cssVar('--ui')||'1')||1;
@@ -690,9 +713,21 @@
     }
   }
 
+  function stopAirUpdates(){
+    if(airTimer){
+      clearInterval(airTimer);
+      airTimer=null;
+    }
+  }
+
   function pauseLive(){
     livePauseDepth++;
     stopLive();
+  }
+
+  function pauseAir(){
+    airPauseDepth++;
+    stopAirUpdates();
   }
 
   function resumeLive(force=false){
@@ -706,7 +741,18 @@
     }
   }
 
-  const pauseDuring=(fn)=>async(...a)=>{ pauseLive(); try{ return await fn(...a); } finally{ resumeLive(); } };
+  function resumeAir(force=false){
+    if(force){
+      airPauseDepth=0;
+    }else{
+      airPauseDepth=Math.max(0, airPauseDepth-1);
+    }
+    if(airPauseDepth===0 && floorplanEnabled && !airTimer){
+      airTimer = setInterval(refreshAirDataFromHA, AIR_INTERVAL_MS);
+    }
+  }
+
+  const pauseDuring=(fn)=>async(...a)=>{ pauseLive(); pauseAir(); try{ return await fn(...a); } finally{ resumeLive(); resumeAir(); } };
 
   let statusResetTimer=null;
   function setStatusText(text){
@@ -939,6 +985,36 @@
     }catch(_e){} finally{ liveInFlight=false; }
   }
 
+  async function refreshAirDataFromHA(){
+    if(airInFlight || document.visibilityState==='hidden') return;
+    const idsSet=new Set();
+    floorplanAirMarkers.forEach(a=>{ if(a?.device_id) idsSet.add(a.device_id); });
+    const dev = placementDevice();
+    if(dev?.device_id) idsSet.add(dev.device_id);
+    const ids=[...idsSet.keys()];
+    if(!ids.length) return;
+    airInFlight=true;
+    try{
+      const results=await Promise.allSettled(
+        ids.map(deviceId=>api('api/device_entities',{device_id:deviceId},{reloadOnError:false}))
+      );
+      let changed=false;
+      results.forEach((res, idx)=>{
+        if(res.status!=='fulfilled') return;
+        let arr=[];
+        try{
+          arr=Array.isArray(res.value)?res.value:JSON.parse(res.value||'[]');
+        }catch(_e){
+          return;
+        }
+        const list=arr.map(e=>({entity_id:e.entity_id,domain:e.domain,state:e.state,attributes:e.attributes||{}}));
+        updateAirDataForDevice(ids[idx], list);
+        changed=true;
+      });
+      if(changed) enqueueDraw();
+    }catch(_e){} finally{ airInFlight=false; }
+  }
+
   function findEntityIdBySuffix(suffix){
     return (entities.find(x=>x.entity_id.endsWith(suffix))?.entity_id)||null;
   }
@@ -981,6 +1057,7 @@
     const rows=await api('api/device_entities',{device_id},{reloadOnError:false});
     const arr=Array.isArray(rows)?rows:JSON.parse(rows||'[]');
     entities=arr.map(e=>({entity_id:e.entity_id,domain:e.domain,state:e.state,attributes:e.attributes||{}}));
+    updateAirDataForDevice(device_id, entities);
     const nextMode = detectInstallMode();
     if(selectedDevice?.device_id === device_id){
       if(nextMode !== installMode){
@@ -994,6 +1071,9 @@
       }else{
         installMode = nextMode;
       }
+    }
+    if(floorplanAirMarkers.some(a=>a.device_id===device_id)){
+      enqueueDraw();
     }
   }
 
@@ -1102,6 +1182,37 @@
     cloned.zones = cloneZones(s.zones||emptyZones());
     return cloned;
   };
+  function airTextSizeLimits(){
+    if(IS_MOBILE){
+      return {
+        min: AIR_TEXT_MOBILE_MIN_PX * AIR_TEXT_MOBILE_SCALE,
+        max: AIR_TEXT_MOBILE_MAX_PX * AIR_TEXT_MOBILE_SCALE
+      };
+    }
+    return {min: AIR_TEXT_DESKTOP_MIN_PX, max: AIR_TEXT_DESKTOP_MAX_PX};
+  }
+  function airTextHeightPx(){
+    const {min, max} = airTextSizeLimits();
+    const scale = IS_MOBILE ? AIR_TEXT_MOBILE_SCALE : 1;
+    const raw = AIR_TEXT_HEIGHT_PX * camFP.zoom * scale;
+    return clamp(Math.round(raw), min, max);
+  }
+  function airTextWidthPx(){
+    return airTextHeightPx() * AIR_TEXT_ASPECT;
+  }
+  const makeAirMarker=(x,y,dev)=>({
+    x,y,
+    device_id:dev?.device_id||'',
+    name:dev?.name||'',
+    model:dev?.model||''
+  });
+  const clampAirPos=(a)=>({
+    x:clamp(Number(a?.x)||0,FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax),
+    y:clamp(Number(a?.y)||0,FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax),
+    device_id: a?.device_id || a?.deviceId || '',
+    name: a?.name || '',
+    model: a?.model || ''
+  });
 
   function adoptZonesFromSensor(sensor){
     if(!sensor) return;
@@ -1793,7 +1904,7 @@
   function shouldShowFloorplanGrid(){
     if(!floorplanEnabled) return false;
     if(isMobileUI()) return false;
-    if(floorplanTool==='draw' || floorplanTool==='sensor' || floorplanTool==='zone') return true;
+    if(floorplanTool==='draw' || floorplanTool==='sensor' || floorplanTool==='zone' || floorplanTool==='air') return true;
     if(floorplanActiveLine!==null) return true;
     if(floorplanSensorDragging!==null || floorplanSensorRotating!==null) return true;
     if(floorplanZoneDragIdx!=null || floorplanZoneDragWhole) return true;
@@ -1802,7 +1913,7 @@
 
   function shouldShowFloorplanFov(){
     if(!floorplanEnabled) return false;
-    return (floorplanTool==='draw' || floorplanTool==='sensor' || floorplanTool==='zone');
+    return (floorplanTool==='draw' || floorplanTool==='sensor' || floorplanTool==='zone' || floorplanTool==='air');
   }
 
   function drawFloorplan2DView(){
@@ -1810,6 +1921,7 @@
     drawFloorplanPolylines();
     drawFloorplanPreviewLine();
     drawFloorplanSensorOverlay2D();
+    drawFloorplanAirOverlay2D();
     const sensorColor = WALL_COLOR;
     const sensorRadius = wallHandleRadius();
     floorplanSensors.forEach(s=>{
@@ -2698,6 +2810,16 @@
     return bestIdx;
   }
 
+  function airRectHit(px,py){
+    for(let i=floorplanAirMarkers.length-1;i>=0;i--){
+      const rect=airRectPx(floorplanAirMarkers[i]);
+      if(px>=rect.left && px<=rect.right && py>=rect.top && py<=rect.bottom){
+        return i;
+      }
+    }
+    return -1;
+  }
+
   function sensorHandleWorld(sensor){
     if(!sensor) return null;
     const mode=sensorInstallMode(sensor);
@@ -2943,6 +3065,129 @@
     const sensors = floorplanSensorsForOverlay();
     if(!sensors.length) return;
     sensors.forEach(drawSingleSensorOverlay2D);
+  }
+
+  function formatAirValue(val, unit='', digits=0){
+    if(!Number.isFinite(val)) return 'unknown';
+    const v = digits>0 ? val.toFixed(digits) : String(Math.round(val));
+    return unit ? `${v}${unit}` : v;
+  }
+
+  function airRectPx(a){
+    const cx=fpToPxX(a.x);
+    const cy=fpToPxY(a.y);
+    const h=airTextHeightPx();
+    const w=airTextWidthPx();
+    return {
+      cx,
+      cy,
+      w,
+      h,
+      left: cx - w*0.5,
+      top: cy - h*0.5,
+      right: cx + w*0.5,
+      bottom: cy + h*0.5
+    };
+  }
+
+  function fitTextToWidth(text, maxW){
+    if(ctx.measureText(text).width<=maxW) return text;
+    let s=text;
+    while(s.length>1 && ctx.measureText(s+'…').width>maxW){
+      s=s.slice(0,-1);
+    }
+    return s.length<text.length ? s+'…' : s;
+  }
+
+  function drawAirTextBlock(rect, lines, alpha=1){
+    if(!lines?.length) return;
+    const w=rect.w;
+    const h=rect.h;
+    const lineH=IS_MOBILE
+      ? h/Math.max(1, lines.length + 0.5)
+      : h/Math.max(1, lines.length);
+    const lineGap=IS_MOBILE ? lineH*0.22 : 0;
+    const baseFontSize=IS_MOBILE
+      ? Math.max(7, Math.min(12, lineH*0.7))
+      : Math.max(8, Math.min(14, lineH*0.85));
+    const minFontSize=IS_MOBILE ? 6 : 8;
+    let fontSize=baseFontSize;
+    ctx.save();
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.globalAlpha=alpha;
+    ctx.font=`${fontSize}px system-ui`;
+    let maxLineW=0;
+    lines.forEach(line=>{
+      maxLineW=Math.max(maxLineW, ctx.measureText(line).width);
+    });
+    if(maxLineW>w){
+      const scaled=Math.floor(baseFontSize * (w / maxLineW));
+      fontSize=Math.max(minFontSize, Math.min(baseFontSize, scaled));
+      ctx.font=`${fontSize}px system-ui`;
+    }
+    ctx.textBaseline='middle';
+    ctx.textAlign='center';
+    ctx.fillStyle='#e6eaf1';
+    const step=lineH + lineGap;
+    const blockH=(step * lines.length) - lineGap;
+    const startY=rect.cy - blockH*0.5 + lineH*0.5;
+    lines.forEach((line,i)=>{
+      const fit=fitTextToWidth(line, w);
+      ctx.fillText(fit, rect.cx, startY + i*step);
+    });
+    ctx.restore();
+  }
+
+  function airLinesForData(data, co2Label){
+    const co2Known=Number.isFinite(data.co2);
+    const vocKnown=Number.isFinite(data.voc);
+    const tempKnown=Number.isFinite(data.temp);
+    const humKnown=Number.isFinite(data.hum);
+    const luxKnown=Number.isFinite(data.lux);
+    const uvKnown=Number.isFinite(data.uv);
+    const anyKnown=co2Known || vocKnown || tempKnown || humKnown || luxKnown || uvKnown;
+    if(!anyKnown){
+      return ['', '', '', ''];
+    }
+
+    const co2=formatAirValue(data.co2,'',0);
+    const voc=vocKnown ? formatAirValue(data.voc,'',1) : '';
+    const temp=formatAirValue(data.temp,'',1);
+    const hum=formatAirValue(data.hum,'',0);
+    const lux=formatAirValue(data.lux,'',0);
+    const uv=formatAirValue(data.uv,'',1);
+    const vocLine=vocKnown ? `VOC: ${voc}` : '';
+    const co2Line=co2Known ? `${co2Label}: ${co2}` : '';
+    const thLine=(tempKnown || humKnown) ? `T: ${temp}  H: ${hum}` : '';
+    const lxuvLine=(luxKnown || uvKnown) ? `LX: ${lux}  UV: ${uv}` : '';
+    const onlyLuxUv = !co2Known && !vocKnown && !tempKnown && !humKnown && (luxKnown || uvKnown);
+    if(onlyLuxUv){
+      return [lxuvLine, '', '', ''];
+    }
+    if(vocKnown){
+      return [co2Line, vocLine, thLine, lxuvLine];
+    }
+    return [co2Line, thLine, lxuvLine, ''];
+  }
+
+  function drawFloorplanAirOverlay2D(){
+    floorplanAirMarkers.forEach(a=>{
+      const rect=airRectPx(a);
+
+      const data=airDataForDevice(a.device_id)||{};
+      const co2Label=data.co2Label || 'CO2';
+      const lines=airLinesForData(data, co2Label);
+      drawAirTextBlock(rect, lines, 1);
+    });
+
+    if(floorplanTool==='air' && floorplanAirHover){
+      const rect=airRectPx(floorplanAirHover);
+      const devId=placementDevice()?.device_id;
+      const data=airDataForDevice(devId)||{};
+      const co2Label=data.co2Label || 'CO2';
+      const lines=airLinesForData(data, co2Label);
+      drawAirTextBlock(rect, lines, 0.6);
+    }
   }
 
   function drawFloorplanSensorOverlay3D(){
@@ -4347,6 +4592,45 @@ ctx.restore();
       }
     }
 
+    if(floorplanTool==='air'){
+      const hitIdx = airRectHit(px,py);
+      if(button===2 && hitIdx>=0){
+        pushFloorplanHistory();
+        floorplanAirMarkers.splice(hitIdx,1);
+        enqueueDraw();
+        return;
+      }
+      if(button===0 && hitIdx>=0){
+        pushFloorplanHistory();
+        floorplanAirDragging=hitIdx;
+        const rect=airRectPx(floorplanAirMarkers[hitIdx]);
+        floorplanAirDragOffset={x:px-rect.cx, y:py-rect.cy};
+        floorplanAirHover=null;
+        enqueueDraw();
+        return;
+      }
+      if(button===0){
+        const dev = placementDevice();
+        if(!dev){
+          reportError('Air quality placement failed');
+          return;
+        }
+        pushFloorplanHistory();
+        const existingIdx = floorplanAirMarkers.findIndex(a=>a.device_id===dev.device_id);
+        const newMarker = clampAirPos(makeAirMarker(world.x,world.y,dev));
+        if(existingIdx>=0){
+          floorplanAirMarkers[existingIdx]=newMarker;
+        }else{
+          floorplanAirMarkers.push(newMarker);
+        }
+        floorplanAirDragOffset=null;
+        floorplanAirHover=null;
+        setReady();
+        enqueueDraw();
+        return;
+      }
+    }
+
   }
 
   function handleFloorplanZoneDown(px,py,shiftKey=false,button=0){
@@ -4448,10 +4732,29 @@ ctx.restore();
       return;
     }
 
+    if(floorplanAirDragging!==null && floorplanAirMarkers[floorplanAirDragging]){
+      const a=floorplanAirMarkers[floorplanAirDragging];
+      const rect=airRectPx(a);
+      const off=floorplanAirDragOffset || {x:0, y:0};
+      const cxPx = px - off.x;
+      const cyPx = py - off.y;
+      floorplanAirMarkers[floorplanAirDragging].x=clamp(fpFromPxX(cxPx),FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax);
+      floorplanAirMarkers[floorplanAirDragging].y=clamp(fpFromPxY(cyPx),FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax);
+      floorplanAirHover=null;
+      enqueueDraw();
+      return;
+    }
+
     if(floorplanTool==='sensor'){
       const devId = placementDevice()?.device_id;
       const hasSensor = devId && floorplanSensors.some(s=>s.device_id===devId);
       floorplanSensorHover = hasSensor ? null : world;
+      enqueueDraw();
+    }
+    if(floorplanTool==='air'){
+      const devId = placementDevice()?.device_id;
+      const hasAir = devId && floorplanAirMarkers.some(a=>a.device_id===devId);
+      floorplanAirHover = hasAir ? null : world;
       enqueueDraw();
     }
   }
@@ -4496,6 +4799,10 @@ ctx.restore();
     if(floorplanSensorDragging!==null){
       floorplanSensorDragging=null;
     }
+    if(floorplanAirDragging!==null){
+      floorplanAirDragging=null;
+    }
+    floorplanAirDragOffset=null;
     if(floorplanZoneDragIdx!==null || floorplanZoneDragWhole){
       syncActiveFloorplanSensorZones();
     }
@@ -4503,6 +4810,7 @@ ctx.restore();
     floorplanZoneDragWhole=false;
     floorplanDragMode=null;
     floorplanSensorHover=null;
+    floorplanAirHover=null;
     applyFloorplanAutoFitIfDirty();
     enqueueDraw();
   }
@@ -4521,13 +4829,15 @@ ctx.restore();
       sensors: floorplanSensors.map(s=>({
         ...s,
         zones: cloneZones(s.zones||zones)
-      }))
+      })),
+      air: floorplanAirMarkers.map(clampAirPos)
     };
   }
 
   function restoreFloorplan(state){
     floorplanPolylines = (state?.polylines||[]).map(normalizePolyline).filter(l=>l.length);
     floorplanSensors = (state?.sensors||[]).map(clampSensorPos);
+    floorplanAirMarkers = (state?.air||[]).map(clampAirPos);
   }
 
   function pushFloorplanHistory(){
@@ -4577,6 +4887,9 @@ ctx.restore();
     floorplanSensorHover=null;
     floorplanSensorDragging=null;
     floorplanSensorRotating=null;
+    floorplanAirHover=null;
+    floorplanAirDragging=null;
+    floorplanAirDragOffset=null;
     floorplanZoneDragIdx=null;
     floorplanZoneDragWhole=false;
     floorplanZoneLastPX=0;
@@ -4588,6 +4901,63 @@ ctx.restore();
     if(!e) return null;
     const v=(typeof e.state==='number')?e.state:Number(e.state);
     return Number.isFinite(v)?v:null;
+  }
+
+  const AIR_SUFFIXES={
+    bme:{
+      co2:'_bme688_co2_equivalent',
+      voc:'_bme688_voc_equivalent',
+      temp:'_bme688_temperature',
+      hum:'_bme688_humidity'
+    },
+    scd:{
+      co2:'_scd40_co2_concentration',
+      temp:'_scd40_temperature',
+      hum:'_scd40_humidity'
+    },
+    light:'_ltr390_ambient_light_lux',
+    uv:'_ltr390_uv_index'
+  };
+
+  function airDataFromEntities(list){
+    const scd={
+      co2: readNumberBySuffixFrom(list, AIR_SUFFIXES.scd.co2),
+      temp: readNumberBySuffixFrom(list, AIR_SUFFIXES.scd.temp),
+      hum: readNumberBySuffixFrom(list, AIR_SUFFIXES.scd.hum)
+    };
+    const hasScd = scd.co2!==null || scd.temp!==null || scd.hum!==null;
+    const bme={
+      co2: readNumberBySuffixFrom(list, AIR_SUFFIXES.bme.co2),
+      voc: readNumberBySuffixFrom(list, AIR_SUFFIXES.bme.voc),
+      temp: readNumberBySuffixFrom(list, AIR_SUFFIXES.bme.temp),
+      hum: readNumberBySuffixFrom(list, AIR_SUFFIXES.bme.hum)
+    };
+    const co2 = hasScd ? (scd.co2 ?? bme.co2) : bme.co2;
+    const temp = hasScd ? (scd.temp ?? bme.temp) : bme.temp;
+    const hum = hasScd ? (scd.hum ?? bme.hum) : bme.hum;
+    const lux = readNumberBySuffixFrom(list, AIR_SUFFIXES.light);
+    const uv = readNumberBySuffixFrom(list, AIR_SUFFIXES.uv);
+    return {
+      co2,
+      co2Label: hasScd ? 'CO2' : 'CO2e',
+      voc: bme.voc,
+      temp,
+      hum,
+      lux,
+      uv,
+      source: hasScd ? 'scd40' : 'bme688'
+    };
+  }
+
+  function updateAirDataForDevice(deviceId, list){
+    if(!deviceId) return;
+    const data = airDataFromEntities(list||[]);
+    airDataByDevice.set(deviceId, data);
+  }
+
+  function airDataForDevice(deviceId){
+    if(deviceId && airDataByDevice.has(deviceId)) return airDataByDevice.get(deviceId);
+    return null;
   }
 
   function detectInstallModeFromEntities(list){
@@ -4619,12 +4989,15 @@ ctx.restore();
   }
 
   async function refreshAllFloorplanSensorsFromHA(){
-    if(!floorplanSensors.length) return;
     const sensorById=new Map();
     floorplanSensors.forEach(s=>{
       if(s?.device_id && !sensorById.has(s.device_id)) sensorById.set(s.device_id, s);
     });
-    const ids=[...sensorById.keys()];
+    const idsSet=new Set([...sensorById.keys()]);
+    floorplanAirMarkers.forEach(a=>{
+      if(a?.device_id) idsSet.add(a.device_id);
+    });
+    const ids=[...idsSet.keys()];
     if(!ids.length) return;
     const results=await Promise.allSettled(
       ids.map(deviceId=>api('api/device_entities',{device_id:deviceId},{reloadOnError:false}))
@@ -4640,19 +5013,22 @@ ctx.restore();
         return;
       }
       const list=arr.map(e=>({entity_id:e.entity_id,domain:e.domain,state:e.state,attributes:e.attributes||{}}));
+      updateAirDataForDevice(deviceId, list);
       const existing=sensorById.get(deviceId);
-      const fallbackMode=existing ? sensorInstallMode(existing) : 'side';
-      const mode=detectInstallModeFromEntities(list) || fallbackMode;
-      let v=null;
-      for(const suffix of rangeSuffixesForMode(mode)){
-        v=readNumberBySuffixFrom(list, suffix);
-        if(v!==null) break;
+      if(existing){
+        const fallbackMode=existing ? sensorInstallMode(existing) : 'side';
+        const mode=detectInstallModeFromEntities(list) || fallbackMode;
+        let v=null;
+        for(const suffix of rangeSuffixesForMode(mode)){
+          v=readNumberBySuffixFrom(list, suffix);
+          if(v!==null) break;
+        }
+        const existingRange=Number.isFinite(Number(existing?.detRange)) ? Number(existing.detRange) : MAX_RANGE;
+        const det=Math.round(Math.max(Y_MIN,Math.min(MAX_RANGE,v??existingRange)));
+        const parsedZones=zonesFromEntities(list);
+        const zones=parsedZones.hasData ? parsedZones.zones : (existing?.zones || emptyZones());
+        updates.set(deviceId, {install_mode: mode, detRange: det, zones});
       }
-      const existingRange=Number.isFinite(Number(existing?.detRange)) ? Number(existing.detRange) : MAX_RANGE;
-      const det=Math.round(Math.max(Y_MIN,Math.min(MAX_RANGE,v??existingRange)));
-      const parsedZones=zonesFromEntities(list);
-      const zones=parsedZones.hasData ? parsedZones.zones : (existing?.zones || emptyZones());
-      updates.set(deviceId, {install_mode: mode, detRange: det, zones});
     });
     if(!updates.size) return;
     floorplanSensors = floorplanSensors.map(s=>{
@@ -4675,6 +5051,10 @@ ctx.restore();
     floorplanSensorHover=null;
     floorplanSensorDragging=null;
     floorplanSensorRotating=null;
+    floorplanAirMarkers=[];
+    floorplanAirHover=null;
+    floorplanAirDragging=null;
+    floorplanAirDragOffset=null;
     floorplanHistory=[];
     floorplanFuture=[];
     resetFPCam();
@@ -4714,8 +5094,13 @@ ctx.restore();
           });
           floorplanSensors=[single];
         }
+        if(Array.isArray(parsed.air)){
+          floorplanAirMarkers = parsed.air.map(clampAirPos);
+        }
         await refreshAllFloorplanSensorsFromHA();
-        const lastDev=floorplanSensors[floorplanSensors.length-1]?.device_id||'';
+        const lastDev=floorplanSensors[floorplanSensors.length-1]?.device_id
+          || floorplanAirMarkers[floorplanAirMarkers.length-1]?.device_id
+          || '';
         if(floorplanDeviceSel && lastDev){
           floorplanDeviceSel.value = lastDev;
         }
@@ -4740,7 +5125,12 @@ ctx.restore();
     try{
       syncActiveSensorState();
       const sensorsOk = await saveAllFloorplanSensorZones();
-      const body={floor_id:selectedFloorId, polylines:floorplanPolylines, sensors:floorplanSensors.map(clampSensorPos)};
+      const body={
+        floor_id:selectedFloorId,
+        polylines:floorplanPolylines,
+        sensors:floorplanSensors.map(clampSensorPos),
+        air: floorplanAirMarkers.map(clampAirPos)
+      };
       const r = await fetch('api/floorplan',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -4799,6 +5189,9 @@ ctx.restore();
     floorplanSensorHover=null;
     floorplanSensorDragging=null;
     floorplanSensorRotating=null;
+    floorplanAirHover=null;
+    floorplanAirDragging=null;
+    floorplanAirDragOffset=null;
     floorplanLengthInput='';
     enqueueDraw();
   }
@@ -4853,6 +5246,7 @@ ctx.restore();
         return;
       }
       floorplanSensorHover=null;
+      floorplanAirHover=null;
       if(currentZone && floorplanTool==='zone'){
         handleFloorplanZoneDown(px,py,shiftKey,button);
         return;
@@ -5030,7 +5424,7 @@ ctx.restore();
 
     if(floorplanEnabled){
       if(IS_MOBILE) return;
-      if((floorplanSensorDragging!==null || floorplanSensorRotating!==null)){
+      if((floorplanSensorDragging!==null || floorplanSensorRotating!==null || floorplanAirDragging!==null)){
         handleFloorplanSelectMove(px,py);
         return;
       }
@@ -5350,6 +5744,10 @@ ctx.restore();
       floorplanSensorHover=null;
       floorplanSensorDragging=null;
       floorplanSensorRotating=null;
+      floorplanAirMarkers=[];
+      floorplanAirHover=null;
+      floorplanAirDragging=null;
+      floorplanAirDragOffset=null;
       floorplanDragMode=null;
       floorplanHistory=[];
       floorplanFuture=[];
@@ -5546,6 +5944,12 @@ ctx.restore();
         reportError(e?.message || 'No data available');
       }
     }
+    if(floorplanEnabled){
+      resumeAir(true);
+      refreshAirDataFromHA();
+    }else{
+      stopAirUpdates();
+    }
     showDeviceSelector();
     resetOrbitIf3D();
     if(viewControls && modeTitle){
@@ -5648,6 +6052,8 @@ ctx.restore();
           zoneBtns.forEach(b=>b.classList.toggle('active', b.dataset.zone==='1'));
         }
         setFloorplanTool('zone');
+      }else if(tool==='air'){
+        setFloorplanTool('air');
       }
     });
   });
@@ -5745,12 +6151,18 @@ ctx.restore();
       ro.observe(panelCard);
       window.addEventListener('resize',syncLayout);
       document.addEventListener('visibilitychange',()=>{
-        if(document.visibilityState==='hidden') pauseLive();
-        else resumeLive(true);
+        if(document.visibilityState==='hidden'){
+          pauseLive();
+          pauseAir();
+        }else{
+          resumeLive(true);
+          resumeAir(true);
+        }
       });
       legendSigmaBtns.forEach(b=>b.classList.remove('active'));
       syncLayout();
       resumeLive(true);
+      resumeAir(true);
       document.body.style.opacity = '1';
     }
   })();

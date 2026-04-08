@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-08 — v1.5.9
+* Added Floorplan air visualization for BME688 and SCD40 sensors.
+* Note: On S1 Pro, when the SCD40 add-on is installed, CO2 and temperature/humidity are sourced from the SCD40 (true CO2 and more accurate temp/humidity) instead of the built-in BME688.
+* On E1 Pro, you can choose either the BME688 add-on or the SCD40 add-on; if neither is installed, the Floorplan shows only LX/UV.
+
 ## 2026-01-22 — v1.4.9
 * Added full ceiling (top-down) and wall-mounted FoV support in preparation for the E1 Pro Multi Sense launch.
 * Extended live target tracking from 3 to 5 simultaneous targets to support E1 Pro capabilities.
