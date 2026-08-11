@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-08-11 — v1.5.10
+* Fixed Home Assistant 2026.8 device-registry split compatibility by discovering Sensy-One radars from their target coordinate entities.
+* Existing floorplan radar references are now resolved to current device IDs and repaired automatically without changing placement or zones.
+* New floorplan placements store stable radar identity metadata for future device-ID changes.
+
 ## 2026-04-08 — v1.5.9
 * Added Floorplan air visualization for BME688 and SCD40 sensors.
 * Note: On S1 Pro, when the SCD40 add-on is installed, CO2 and temperature/humidity are sourced from the SCD40 (true CO2 and more accurate temp/humidity) instead of the built-in BME688.

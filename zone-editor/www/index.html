@@ -868,20 +868,6 @@
     }
   }
 
-  const TPL_LIST=`
-{% set out = namespace(items=[], ids=[]) %}
-{% for s in states %}
-  {% set dev = s.entity_id | device_id %}
-  {% if dev and (device_attr(dev,'manufacturer') or '') == 'Sensy-One' and (dev not in out.ids) %}
-    {% set name = device_attr(dev,'name_by_user') or device_attr(dev,'name') or dev %}
-    {% set model = device_attr(dev,'model') or '' %}
-    {% set out.items = out.items + [ { 'device_id': dev, 'name': name, 'model': model } ] %}
-    {% set out.ids = out.ids + [ dev ] %}
-  {% endif %}
-{% endfor %}
-{{ out.items | tojson }}
-  `.trim();
-
   const targetsTemplate=(devId)=>(`
 {% set dev = '`+devId+`' %}
 {% set out = namespace(
@@ -1111,11 +1097,34 @@
     populateDevices(devicesList, selectedDevice?.device_id, floorplanDeviceSel);
   }
 
+  function cloneRadarIdentity(identity){
+    if(!identity || typeof identity!=='object') return null;
+    return {
+      identifiers:(identity.identifiers||[]).map(pair=>[...pair]),
+      connections:(identity.connections||[]).map(pair=>[...pair]),
+      serial_number:identity.serial_number||'',
+      target_entities:[...(identity.target_entities||[])]
+    };
+  }
+
+  function deviceReference(device){
+    if(!device?.device_id) return null;
+    const reference={
+      device_id:device.device_id,
+      name:device.name||device.device_id,
+      model:device.model||''
+    };
+    const identity=cloneRadarIdentity(device.radar_identity);
+    if(identity) reference.radar_identity=identity;
+    return reference;
+  }
+
   function selectedDeviceFromSelect(selectEl){
     if(!selectEl || !selectEl.value) return null;
     const opt=selectEl.options[selectEl.selectedIndex] || selectEl.options[0];
     if(!opt || !opt.value) return null;
-    return {
+    const discovered=devicesList.find(device=>device.device_id===opt.value);
+    return deviceReference(discovered) || {
       device_id: opt.value,
       name: opt.textContent || opt.value,
       model: opt.dataset.model || ''
@@ -1158,6 +1167,8 @@
       detRange: detRange,
       zones: cloneZones(zones)
     };
+    const identity=cloneRadarIdentity(dev?.radar_identity);
+    if(identity) sensor.radar_identity=identity;
     if(mode) sensor.install_mode = mode;
     return sensor;
   };
@@ -1200,19 +1211,29 @@
   function airTextWidthPx(){
     return airTextHeightPx() * AIR_TEXT_ASPECT;
   }
-  const makeAirMarker=(x,y,dev)=>({
-    x,y,
-    device_id:dev?.device_id||'',
-    name:dev?.name||'',
-    model:dev?.model||''
-  });
-  const clampAirPos=(a)=>({
-    x:clamp(Number(a?.x)||0,FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax),
-    y:clamp(Number(a?.y)||0,FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax),
-    device_id: a?.device_id || a?.deviceId || '',
-    name: a?.name || '',
-    model: a?.model || ''
-  });
+  const makeAirMarker=(x,y,dev)=>{
+    const marker={
+      x,y,
+      device_id:dev?.device_id||'',
+      name:dev?.name||'',
+      model:dev?.model||''
+    };
+    const identity=cloneRadarIdentity(dev?.radar_identity);
+    if(identity) marker.radar_identity=identity;
+    return marker;
+  };
+  const clampAirPos=(a)=>{
+    const marker={
+      x:clamp(Number(a?.x)||0,FLOORPLAN_BOUNDS.xMin,FLOORPLAN_BOUNDS.xMax),
+      y:clamp(Number(a?.y)||0,FLOORPLAN_BOUNDS.yMin,FLOORPLAN_BOUNDS.yMax),
+      device_id: a?.device_id || a?.deviceId || '',
+      name: a?.name || '',
+      model: a?.model || ''
+    };
+    const identity=cloneRadarIdentity(a?.radar_identity);
+    if(identity) marker.radar_identity=identity;
+    return marker;
+  };
 
   function adoptZonesFromSensor(sensor){
     if(!sensor) return;
@@ -1237,7 +1258,7 @@
 
   function selectSensorContext(sensor){
     if(!sensor || !sensor.device_id) return;
-    selectedDevice={device_id:sensor.device_id,name:sensor.name||sensor.device_id,model:sensor.model||''};
+    selectedDevice=deviceReference(sensor);
     adoptZonesFromSensor(sensor);
     clearZoneSelection();
   }
@@ -1274,7 +1295,7 @@
       if(val){
         const entry=devicesList.find(d=>d.device_id===val);
         selectedDevice = entry
-          ? {device_id:entry.device_id,name:entry.name||entry.device_id,model:entry.model||''}
+          ? deviceReference(entry)
           : {device_id:val,name:val,model:''};
       }
     }else{
@@ -1365,11 +1386,7 @@
       reportError('No data available');
       return false;
     }
-    selectedDevice={
-      device_id: target.device_id,
-      name: target.name || target.device_id,
-      model: target.model || ''
-    };
+    selectedDevice=deviceReference(target);
     await loadDeviceEntities(target.device_id);
     await loadAll();
     const sensorIdx = floorplanSensors.findIndex(s=>s.device_id===selectedDevice.device_id);
@@ -5081,6 +5098,9 @@ ctx.restore();
         if(line.length) floorplanPolylines=[line];
       }
       if(parsed){
+        if(Array.isArray(parsed.warnings)){
+          parsed.warnings.forEach(warning=>console.warn('Floorplan radar migration:', warning));
+        }
         if(Array.isArray(parsed.sensors)){
           floorplanSensors = parsed.sensors.map(clampSensorPos);
         }else if(parsed.sensor){
@@ -6084,11 +6104,7 @@ ctx.restore();
       reportError('No data available');
       return;
     }
-    selectedDevice={
-      device_id:selectEl.value,
-      name:selectEl.options[selectEl.selectedIndex]?.textContent||selectEl.value,
-      model:selectEl.options[selectEl.selectedIndex]?.dataset.model||''
-    };
+    selectedDevice=selectedDeviceFromSelect(selectEl);
     persistUiState();
     livePos = livePosFor(selectedDevice.device_id);
     heatmapPositions=[];
@@ -6118,7 +6134,7 @@ ctx.restore();
       pauseLive();
       initialUiState=loadUiState();
       await api('api/template',{template:'{{ 1+1 }}'});
-      const res=await api('api/template',{template:TPL_LIST});
+      const res=await api('api/radar_devices',{});
       const list=typeof res==='string'?JSON.parse(res||'[]'):res;
       devicesList = list;
       populateDevices(devicesList, initialUiState?.selectedDeviceId || null);
@@ -6126,11 +6142,7 @@ ctx.restore();
         reportError('No data available');
         return;
       }
-      selectedDevice={
-        device_id:sel.value,
-        name:sel.options[sel.selectedIndex]?.textContent||sel.value,
-        model:sel.options[sel.selectedIndex]?.dataset.model||''
-      };
+      selectedDevice=selectedDeviceFromSelect(sel);
       livePos = livePosFor(selectedDevice.device_id);
       syncFloorplanDeviceSelector();
       await fetchZonesFromDevice(selectedDevice);
